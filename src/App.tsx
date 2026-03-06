@@ -346,6 +346,16 @@ export default function App() {
               label="Debts"
             />
           </div>
+          {activeTab === 'debts' && (
+            <button
+              onClick={() => setShowSettlementModal(true)}
+              type="button"
+              className="ml-4 flex items-center gap-2 px-5 py-2.5 bg-indigo-500 text-white rounded-full text-xs font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] active:scale-95 cursor-pointer"
+            >
+              <PlusCircle size={14} />
+              Record Settlement
+            </button>
+          )}
         </div>
       </header>
 
@@ -547,14 +557,6 @@ export default function App() {
                     <h2 className="font-black text-xl uppercase italic tracking-tighter">Settlement Plan</h2>
                     <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">Optimized Transaction Matrix</p>
                   </div>
-                  <button
-                    onClick={() => openSettlementModal.current()}
-                    type="button"
-                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-500 text-white rounded-full text-xs font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] active:scale-95 cursor-pointer relative z-50 pointer-events-auto"
-                  >
-                    <PlusCircle size={14} />
-                    Record Settlement
-                  </button>
                 </div>
                 <div className="p-8 space-y-6">
                   {calculateDebts().length > 0 ? (
