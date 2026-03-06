@@ -141,8 +141,8 @@ export default function App() {
             const results = await extractPokerResults(textData, 'text/plain', true);
             setPendingResults(results);
             setShowConfirmModal(true);
-          } catch (error) {
-            setUploadError("Failed to process Excel data. Please try again.");
+          } catch (error: any) {
+            setUploadError(error.message || "Failed to process Excel data. Please try again.");
           } finally {
             setIsUploading(false);
           }
@@ -156,8 +156,8 @@ export default function App() {
             const results = await extractPokerResults(base64, file.type);
             setPendingResults(results);
             setShowConfirmModal(true);
-          } catch (error) {
-            setUploadError("Failed to process file. Check that the file contains readable poker session data.");
+          } catch (error: any) {
+            setUploadError(error.message || "Failed to process file. Check that the file contains readable poker session data.");
           } finally {
             setIsUploading(false);
           }

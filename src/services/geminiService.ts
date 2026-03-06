@@ -30,33 +30,41 @@ export async function extractPokerResults(data: string, mimeType: string, isText
     });
   }
 
-  const response = await ai.models.generateContent({
-    model,
-    contents: [
-      {
-        parts: parts,
-      },
-    ],
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            name: { type: Type.STRING },
-            amount: { type: Type.NUMBER },
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [
+        {
+          parts: parts,
+        },
+      ],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              amount: { type: Type.NUMBER },
+            },
+            required: ["name", "amount"],
           },
-          required: ["name", "amount"],
         },
       },
-    },
-  });
+    });
 
-  try {
-    return JSON.parse(response.text || "[]");
-  } catch (e) {
-    console.error("Failed to parse Gemini response", e);
-    return [];
+    try {
+      return JSON.parse(response.text || "[]");
+    } catch (e) {
+      console.error("Failed to parse Gemini response", e);
+      throw new Error("AI returned invalid data format.");
+    }
+  } catch (apiError: any) {
+    console.error("Gemini API Error details:", apiError);
+    if (apiError?.message?.includes('API key')) {
+      throw new Error("Invalid or missing API key.");
+    }
+    throw new Error(apiError?.message || "Failed to communicate with AI service.");
   }
 }
