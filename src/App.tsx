@@ -503,7 +503,7 @@ export default function App() {
                     transition={{ delay: sIdx * 0.1 }}
                     className="bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl overflow-hidden group"
                   >
-                    <div className="px-8 py-5 border-b border-white/5 flex items-center justify-between bg-white/5">
+                    <div className="px-8 py-5 border-b border-white/5 flex items-center bg-white/5">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-white/5 flex flex-col items-center justify-center border border-white/10">
                           <span className="text-[10px] font-black text-zinc-500 uppercase">{session.date.split('-')[1]}</span>
@@ -514,12 +514,6 @@ export default function App() {
                           <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{session.date}</div>
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleDeleteSession(session.id)}
-                        className="w-10 h-10 flex items-center justify-center text-zinc-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all"
-                      >
-                        <Trash2 size={20} />
-                      </button>
                     </div>
                     <div className="p-8">
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-8">
