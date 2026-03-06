@@ -243,7 +243,6 @@ export default function App() {
   };
 
   const handleDeleteSettlement = async (id: number) => {
-    if (!confirm("Undo this settlement? The debt will be recalculated.")) return;
     try {
       await fetch(`/api/settlements/${id}`, { method: 'DELETE' });
       fetchData();
