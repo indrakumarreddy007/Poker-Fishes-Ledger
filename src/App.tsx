@@ -241,12 +241,21 @@ export default function App() {
   };
 
   const handleDeleteSettlement = async (id: number) => {
-    if (!confirm("Are you sure you want to void this settlement? This action cannot be reversed.")) return;
+    if (!confirm("Undo this settlement? The debt will be recalculated.")) return;
     try {
       await fetch(`/api/settlements/${id}`, { method: 'DELETE' });
       fetchData();
     } catch (error) {
-      alert("Failed to void settlement");
+      alert("Failed to undo settlement");
+    }
+  };
+
+  const handleRestoreSettlement = async (id: number) => {
+    try {
+      await fetch(`/api/settlements/${id}/restore`, { method: 'PATCH' });
+      fetchData();
+    } catch (error) {
+      alert("Failed to restore settlement");
     }
   };
 
@@ -640,14 +649,25 @@ export default function App() {
                           </div>
                         </div>
                       </div>
-                      {settlement.status !== 'voided' && (
-                        <button
-                          onClick={() => handleDeleteSettlement(settlement.id)}
-                          className="w-10 h-10 ml-6 flex items-center justify-center text-zinc-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all"
-                        >
-                          <Trash2 size={20} />
-                        </button>
-                      )}
+                      <div className="flex flex-col gap-1 ml-6">
+                        {settlement.status !== 'voided' ? (
+                          <button
+                            onClick={() => handleDeleteSettlement(settlement.id)}
+                            title="Undo this settlement"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg border border-white/5 hover:border-amber-400/20 transition-all"
+                          >
+                            Undo
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleRestoreSettlement(settlement.id)}
+                            title="Restore this settlement"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg border border-white/5 hover:border-emerald-400/20 transition-all"
+                          >
+                            Restore
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </motion.div>
                 ))}

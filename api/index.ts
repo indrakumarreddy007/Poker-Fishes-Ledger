@@ -217,7 +217,18 @@ app.delete("/api/settlements/:id", async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Failed to delete settlement" });
+    res.status(500).json({ error: "Failed to void settlement" });
+  }
+});
+
+app.patch("/api/settlements/:id/restore", async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query("UPDATE settlements SET status = 'completed' WHERE id = $1", [id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to restore settlement" });
   }
 });
 
