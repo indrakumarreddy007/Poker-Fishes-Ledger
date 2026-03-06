@@ -802,6 +802,94 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Settlement Modal */}
+      {showSettlementModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            onClick={() => setShowSettlementModal(false)}
+          />
+          <div className="bg-zinc-900 w-full max-w-md rounded-[2rem] shadow-2xl border border-white/10 relative z-10 overflow-hidden">
+            <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/5">
+              <div>
+                <h3 className="text-2xl font-black uppercase italic tracking-tighter">Record Settlement</h3>
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">Log a payment between players</p>
+              </div>
+              <button onClick={() => setShowSettlementModal(false)} className="w-10 h-10 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Payer (who paid)</label>
+                <select
+                  value={settlementData.payer}
+                  onChange={(e) => setSettlementData({ ...settlementData, payer: e.target.value })}
+                  className="w-full px-5 py-3 bg-white/5 border border-white/10 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-white font-bold"
+                >
+                  <option value="">Select player...</option>
+                  {players.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Payee (who received)</label>
+                <select
+                  value={settlementData.payee}
+                  onChange={(e) => setSettlementData({ ...settlementData, payee: e.target.value })}
+                  className="w-full px-5 py-3 bg-white/5 border border-white/10 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-white font-bold"
+                >
+                  <option value="">Select player...</option>
+                  {players.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Amount ($)</label>
+                <div className="relative">
+                  <span className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-500 font-mono font-bold">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={settlementData.amount}
+                    onChange={(e) => setSettlementData({ ...settlementData, amount: e.target.value })}
+                    className="w-full pl-10 pr-5 py-3 bg-white/5 border border-white/10 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-white font-mono font-black"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Date</label>
+                <input
+                  type="date"
+                  value={settlementData.date}
+                  onChange={(e) => setSettlementData({ ...settlementData, date: e.target.value })}
+                  className="w-full px-5 py-3 bg-white/5 border border-white/10 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-white font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="p-8 bg-white/5 border-t border-white/5 flex gap-4">
+              <button
+                onClick={() => setShowSettlementModal(false)}
+                className="flex-1 py-4 bg-transparent border border-white/10 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white/5 transition-all active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateSettlement}
+                className="flex-1 py-4 bg-indigo-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-600 transition-all shadow-[0_0_30px_rgba(79,70,229,0.3)] active:scale-95"
+              >
+                Record Payment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
