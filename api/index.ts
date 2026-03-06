@@ -39,8 +39,12 @@ const initDB = async () => {
         payer_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
         payee_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
         amount REAL NOT NULL,
-        date TEXT NOT NULL
+        date TEXT NOT NULL,
+        status TEXT DEFAULT 'completed'
       );
+      
+      -- Alter existing table to add status column if it doesn't exist
+      ALTER TABLE settlements ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'completed';
     `);
     client.release();
   } catch (err) {
@@ -59,8 +63,8 @@ app.get("/api/players", async (req, res) => {
         p.name, 
         (
           COALESCE((SELECT SUM(amount) FROM session_results WHERE player_id = p.id), 0)
-          + COALESCE((SELECT SUM(amount) FROM settlements WHERE payer_id = p.id), 0)
-          - COALESCE((SELECT SUM(amount) FROM settlements WHERE payee_id = p.id), 0)
+          + COALESCE((SELECT SUM(amount) FROM settlements WHERE payer_id = p.id AND status = 'completed'), 0)
+          - COALESCE((SELECT SUM(amount) FROM settlements WHERE payee_id = p.id AND status = 'completed'), 0)
         ) as total_profit
       FROM players p
       ORDER BY total_profit DESC
@@ -157,7 +161,7 @@ app.delete("/api/sessions/:id", async (req, res) => {
 app.get("/api/settlements", async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT s.id, s.amount, s.date, p1.name as payer, p2.name as payee
+      SELECT s.id, s.amount, s.date, s.status, p1.name as payer, p2.name as payee
       FROM settlements s
       JOIN players p1 ON s.payer_id = p1.id
       JOIN players p2 ON s.payee_id = p2.id
@@ -191,7 +195,7 @@ app.post("/api/settlements", async (req, res) => {
     const payeeId = payeeRes.rows[0].id;
 
     const settlementRes = await client.query(
-      "INSERT INTO settlements (payer_id, payee_id, amount, date) VALUES ($1, $2, $3, $4) RETURNING id",
+      "INSERT INTO settlements (payer_id, payee_id, amount, date, status) VALUES ($1, $2, $3, $4, 'completed') RETURNING id",
       [payerId, payeeId, amount, date]
     );
 
@@ -209,7 +213,7 @@ app.post("/api/settlements", async (req, res) => {
 app.delete("/api/settlements/:id", async (req, res) => {
   const { id } = req.params;
   try {
-    await pool.query("DELETE FROM settlements WHERE id = $1", [id]);
+    await pool.query("UPDATE settlements SET status = 'voided' WHERE id = $1", [id]);
     res.json({ success: true });
   } catch (error) {
     console.error(error);

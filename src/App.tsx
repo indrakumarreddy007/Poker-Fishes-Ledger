@@ -51,6 +51,7 @@ interface Settlement {
   date: string;
   payer: string;
   payee: string;
+  status: string;
 }
 
 // --- Components ---
@@ -240,12 +241,12 @@ export default function App() {
   };
 
   const handleDeleteSettlement = async (id: number) => {
-    if (!confirm("Delete this settlement record?")) return;
+    if (!confirm("Are you sure you want to void this settlement? This action cannot be reversed.")) return;
     try {
       await fetch(`/api/settlements/${id}`, { method: 'DELETE' });
       fetchData();
     } catch (error) {
-      alert("Failed to delete settlement");
+      alert("Failed to void settlement");
     }
   };
 
@@ -601,34 +602,52 @@ export default function App() {
                   >
                     <div className="px-8 py-5 flex items-center justify-between">
                       <div className="flex items-center gap-4 border-r border-white/10 pr-6 mr-2">
-                        <div className="w-12 h-12 rounded-xl bg-white/5 flex flex-col items-center justify-center border border-white/10">
+                        <div className={cn(
+                          "w-12 h-12 rounded-xl flex flex-col items-center justify-center border",
+                          settlement.status === 'voided' ? "bg-white/5 border-rose-500/20 opacity-50" : "bg-white/5 border-white/10"
+                        )}>
                           <span className="text-[10px] font-black text-zinc-500 uppercase">{settlement.date.split('-')[1]}</span>
                           <span className="text-lg font-black leading-none">{settlement.date.split('-')[2]}</span>
                         </div>
                       </div>
                       <div className="flex flex-1 items-center justify-between pl-2">
                         <div className="flex items-center gap-4 w-full">
-                          <div className="flex flex-col flex-1">
+                          <div className={cn("flex flex-col flex-1", settlement.status === 'voided' && "opacity-50")}>
                             <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em]">Payer</span>
-                            <span className="font-black text-lg">{settlement.payer}</span>
+                            <span className={cn("font-black text-lg", settlement.status === 'voided' && "line-through text-zinc-500")}>
+                              {settlement.payer}
+                            </span>
                           </div>
                           <ChevronRight size={16} className="text-white/40" />
-                          <div className="flex flex-col flex-1 text-right sm:text-left">
+                          <div className={cn("flex flex-col flex-1 text-right sm:text-left", settlement.status === 'voided' && "opacity-50")}>
                             <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em]">Payee</span>
-                            <span className="font-black text-lg">{settlement.payee}</span>
+                            <span className={cn("font-black text-lg", settlement.status === 'voided' && "line-through text-zinc-500")}>
+                              {settlement.payee}
+                            </span>
                           </div>
                           <div className="flex flex-col flex-1 text-right">
                             <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em]">Amount</span>
-                            <span className="font-mono text-lg font-black text-emerald-400">${Number(settlement.amount).toFixed(2)}</span>
+                            <span className="font-mono text-lg font-black text-emerald-400 relative">
+                              <span className={cn(settlement.status === 'voided' && "line-through text-zinc-500")}>
+                                ${Number(settlement.amount).toFixed(2)}
+                              </span>
+                              {settlement.status === 'voided' && (
+                                <span className="absolute -top-4 -right-2 bg-rose-500/10 text-rose-500 text-[8px] font-black tracking-widest px-2 py-0.5 rounded uppercase">
+                                  Voided
+                                </span>
+                              )}
+                            </span>
                           </div>
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleDeleteSettlement(settlement.id)}
-                        className="w-10 h-10 ml-6 flex items-center justify-center text-zinc-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all"
-                      >
-                        <Trash2 size={20} />
-                      </button>
+                      {settlement.status !== 'voided' && (
+                        <button
+                          onClick={() => handleDeleteSettlement(settlement.id)}
+                          className="w-10 h-10 ml-6 flex items-center justify-center text-zinc-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      )}
                     </div>
                   </motion.div>
                 ))}
