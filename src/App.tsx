@@ -529,15 +529,16 @@ export default function App() {
               exit={{ opacity: 0, y: -20 }}
               className="space-y-8"
             >
-              <div className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl overflow-hidden">
-                <div className="px-8 py-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
+              <div className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl overflow-hidden relative z-20">
+                <div className="px-8 py-6 border-b border-white/5 bg-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-30">
                   <div>
                     <h2 className="font-black text-xl uppercase italic tracking-tighter">Settlement Plan</h2>
                     <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">Optimized Transaction Matrix</p>
                   </div>
                   <button
                     onClick={() => setShowSettlementModal(true)}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-500 text-white rounded-full text-xs font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] active:scale-95"
+                    type="button"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-500 text-white rounded-full text-xs font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] active:scale-95 cursor-pointer relative z-50 pointer-events-auto"
                   >
                     <PlusCircle size={14} />
                     Record Settlement
