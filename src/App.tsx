@@ -81,6 +81,7 @@ export default function App() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSettlementModal, setShowSettlementModal] = useState(false);
   const openSettlementModal = useRef(() => setShowSettlementModal(true));
@@ -118,8 +119,8 @@ export default function App() {
   const onDrop = async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
-
     setIsUploading(true);
+    setUploadError(null);
 
     try {
       if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
@@ -141,7 +142,7 @@ export default function App() {
             setPendingResults(results);
             setShowConfirmModal(true);
           } catch (error) {
-            alert("Failed to process Excel data. Please try again.");
+            setUploadError("Failed to process Excel data. Please try again.");
           } finally {
             setIsUploading(false);
           }
@@ -156,7 +157,7 @@ export default function App() {
             setPendingResults(results);
             setShowConfirmModal(true);
           } catch (error) {
-            alert("Failed to process file. Please try again.");
+            setUploadError("Failed to process file. Check that the file contains readable poker session data.");
           } finally {
             setIsUploading(false);
           }
@@ -488,6 +489,13 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {uploadError && (
+                <div className="flex items-center gap-3 px-6 py-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-400 text-sm font-bold">
+                  <AlertCircle size={18} className="shrink-0" />
+                  {uploadError}
+                </div>
+              )}
 
               {/* Session History */}
               <div className="space-y-6">

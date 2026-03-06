@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const ai = new GoogleGenAI({ apiKey: (import.meta as any).env?.VITE_GEMINI_API_KEY || "" });
 
 export interface ExtractedResult {
   name: string;
@@ -8,8 +8,8 @@ export interface ExtractedResult {
 }
 
 export async function extractPokerResults(data: string, mimeType: string, isText: boolean = false): Promise<ExtractedResult[]> {
-  const model = "gemini-3-flash-preview";
-  
+  const model = "gemini-1.5-flash";
+
   const prompt = `
     Extract player names and their corresponding profit/loss amounts from this poker session data.
     Look for names and numbers (positive for profit, negative for loss).
@@ -18,7 +18,7 @@ export async function extractPokerResults(data: string, mimeType: string, isText
   `;
 
   const parts: any[] = [{ text: prompt }];
-  
+
   if (isText) {
     parts.push({ text: data });
   } else {
