@@ -5,7 +5,7 @@ import * as THREE from 'three';
 
 function PokerChips() {
   const chipsRef = useRef<THREE.Group>(null!);
-  
+
   const chips = useMemo(() => {
     return Array.from({ length: 15 }).map((_, i) => ({
       position: [
@@ -42,8 +42,8 @@ function PokerChips() {
 
 export default function ThreeBackground() {
   return (
-    <div className="fixed inset-0 -z-10 bg-[#050505]">
-      <Canvas dpr={[1, 2]}>
+    <div className="fixed inset-0 -z-10 bg-[#050505] pointer-events-none">
+      <Canvas dpr={[1, 2]} style={{ pointerEvents: 'none' }}>
         <PerspectiveCamera makeDefault position={[0, 0, 8]} fov={50} />
         <ambientLight intensity={0.2} />
         <pointLight position={[10, 10, 10]} intensity={1.5} color="#ffffff" />
@@ -52,7 +52,7 @@ export default function ThreeBackground() {
         <PokerChips />
         <Environment preset="city" />
       </Canvas>
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#050505]/50 to-[#050505]" />
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#050505]/50 to-[#050505] pointer-events-none" />
     </div>
   );
 }
