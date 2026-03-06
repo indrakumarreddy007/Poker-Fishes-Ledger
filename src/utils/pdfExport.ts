@@ -6,7 +6,7 @@ export function exportLedgerToPdf(sessions: any[], players: any[]) {
       <tr>
         <td style="padding:10px 16px;border-bottom:1px solid #e5e7eb;font-weight:600">${p.name}</td>
         <td style="padding:10px 16px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;color:${p.total_profit >= 0 ? '#059669' : '#dc2626'}">
-          ${p.total_profit >= 0 ? '+' : '-'}$${Math.abs(p.total_profit).toFixed(2)}
+          ${p.total_profit >= 0 ? '+' : '-'}₹${Math.abs(p.total_profit).toFixed(2)}
         </td>
       </tr>`)
     .join('');
@@ -16,7 +16,7 @@ export function exportLedgerToPdf(sessions: any[], players: any[]) {
       <div style="display:inline-block;min-width:120px;margin:8px 16px 8px 0">
         <div style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:0.05em">${r.name}</div>
         <div style="font-size:18px;font-weight:800;font-family:monospace;color:${r.amount >= 0 ? '#059669' : '#dc2626'}">
-          ${r.amount >= 0 ? '+' : '-'}$${Math.abs(r.amount).toFixed(2)}
+          ${r.amount >= 0 ? '+' : '-'}₹${Math.abs(r.amount).toFixed(2)}
         </div>
       </div>`).join('');
 

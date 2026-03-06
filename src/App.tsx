@@ -443,7 +443,7 @@ export default function App() {
                           )}>
                             <div className="flex items-center justify-end gap-2">
                               {player.total_profit >= 0 ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
-                              {player.total_profit >= 0 ? '+' : '-'}${Math.abs(player.total_profit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              {player.total_profit >= 0 ? '+' : '-'}₹{Math.abs(player.total_profit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </div>
                           </td>
                         </motion.tr>
@@ -524,7 +524,7 @@ export default function App() {
                               "font-mono text-lg font-black tracking-tighter",
                               res.amount >= 0 ? "text-emerald-400" : "text-rose-500"
                             )}>
-                              {res.amount >= 0 ? '+' : '-'}${Math.abs(res.amount).toFixed(2)}
+                              {res.amount >= 0 ? '+' : '-'}₹{Math.abs(res.amount).toFixed(2)}
                             </span>
                           </div>
                         ))}
@@ -577,7 +577,7 @@ export default function App() {
                           </div>
                         </div>
                         <div className="text-3xl font-mono font-black text-white tracking-tighter">
-                          ${debt.amount.toFixed(2)}
+                          ₹{debt.amount.toFixed(2)}
                         </div>
                       </motion.div>
                     ))
@@ -635,7 +635,7 @@ export default function App() {
                             <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em]">Amount</span>
                             <span className="font-mono text-lg font-black text-emerald-400 relative">
                               <span className={cn(settlement.status === 'voided' && "line-through text-zinc-500")}>
-                                ${Number(settlement.amount).toFixed(2)}
+                                ₹{Number(settlement.amount).toFixed(2)}
                               </span>
                               {settlement.status === 'voided' && (
                                 <span className="absolute -top-4 -right-2 bg-rose-500/10 text-rose-500 text-[8px] font-black tracking-widest px-2 py-0.5 rounded uppercase">
@@ -840,9 +840,9 @@ export default function App() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Amount ($)</label>
+                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Amount (₹)</label>
                 <div className="relative">
-                  <span className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-500 font-mono font-bold">$</span>
+                  <span className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-500 font-mono font-bold">₹</span>
                   <input
                     type="number"
                     min="0"
