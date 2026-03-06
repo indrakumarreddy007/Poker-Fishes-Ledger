@@ -1,0 +1,5 @@
+{
+  "name": "Poker Fishes Ledger",
+  "description": "Maintain a poker ledger with AI-powered screenshot scanning, leaderboard, and debt tracking.",
+  "requestFramePermissions": []
+}
