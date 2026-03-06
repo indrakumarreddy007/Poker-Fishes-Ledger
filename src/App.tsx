@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import {
   Trophy,
   History,
@@ -83,6 +83,8 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSettlementModal, setShowSettlementModal] = useState(false);
+  const openSettlementModal = useRef(() => setShowSettlementModal(true));
+  useEffect(() => { openSettlementModal.current = () => setShowSettlementModal(true); }, [setShowSettlementModal]);
   const [pendingResults, setPendingResults] = useState<ExtractedResult[]>([]);
   const [sessionNote, setSessionNote] = useState('');
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
@@ -546,7 +548,7 @@ export default function App() {
                     <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">Optimized Transaction Matrix</p>
                   </div>
                   <button
-                    onClick={() => setShowSettlementModal(true)}
+                    onClick={() => openSettlementModal.current()}
                     type="button"
                     className="flex items-center gap-2 px-5 py-2.5 bg-indigo-500 text-white rounded-full text-xs font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] active:scale-95 cursor-pointer relative z-50 pointer-events-auto"
                   >
