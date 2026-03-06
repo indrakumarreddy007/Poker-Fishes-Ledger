@@ -33,6 +33,14 @@ const initDB = async () => {
         player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
         amount REAL NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS settlements (
+        id SERIAL PRIMARY KEY,
+        payer_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+        payee_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL
+      );
     `);
     client.release();
   } catch (err) {
@@ -46,10 +54,15 @@ initDB();
 app.get("/api/players", async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT p.id, p.name, COALESCE(SUM(sr.amount), 0) as total_profit
+      SELECT 
+        p.id, 
+        p.name, 
+        (
+          COALESCE((SELECT SUM(amount) FROM session_results WHERE player_id = p.id), 0)
+          + COALESCE((SELECT SUM(amount) FROM settlements WHERE payer_id = p.id), 0)
+          - COALESCE((SELECT SUM(amount) FROM settlements WHERE payee_id = p.id), 0)
+        ) as total_profit
       FROM players p
-      LEFT JOIN session_results sr ON p.id = sr.player_id
-      GROUP BY p.id
       ORDER BY total_profit DESC
     `);
     res.json(rows);
@@ -88,7 +101,7 @@ app.post("/api/sessions", async (req, res) => {
 
   try {
     await client.query("BEGIN");
-    
+
     // Insert session
     const sessionRes = await client.query(
       "INSERT INTO sessions (date, note) VALUES ($1, $2) RETURNING id",
@@ -125,7 +138,7 @@ app.post("/api/sessions", async (req, res) => {
 app.delete("/api/sessions/:id", async (req, res) => {
   const { id } = req.params;
   const client = await pool.connect();
-  
+
   try {
     await client.query("BEGIN");
     await client.query("DELETE FROM session_results WHERE session_id = $1", [id]);
@@ -138,6 +151,69 @@ app.delete("/api/sessions/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to delete session" });
   } finally {
     client.release();
+  }
+});
+
+app.get("/api/settlements", async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT s.id, s.amount, s.date, p1.name as payer, p2.name as payee
+      FROM settlements s
+      JOIN players p1 ON s.payer_id = p1.id
+      JOIN players p2 ON s.payee_id = p2.id
+      ORDER BY s.date DESC, s.id DESC
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to fetch settlements" });
+  }
+});
+
+app.post("/api/settlements", async (req, res) => {
+  const { payer, payee, amount, date } = req.body;
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    // Upsert payer and payee to guarantee they exist and grab IDs
+    const payerRes = await client.query(
+      "INSERT INTO players (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id",
+      [payer]
+    );
+    const payeeRes = await client.query(
+      "INSERT INTO players (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id",
+      [payee]
+    );
+
+    const payerId = payerRes.rows[0].id;
+    const payeeId = payeeRes.rows[0].id;
+
+    const settlementRes = await client.query(
+      "INSERT INTO settlements (payer_id, payee_id, amount, date) VALUES ($1, $2, $3, $4) RETURNING id",
+      [payerId, payeeId, amount, date]
+    );
+
+    await client.query("COMMIT");
+    res.json({ success: true, settlementId: settlementRes.rows[0].id });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error(error);
+    res.status(500).json({ error: "Failed to save settlement" });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete("/api/settlements/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query("DELETE FROM settlements WHERE id = $1", [id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to delete settlement" });
   }
 });
 

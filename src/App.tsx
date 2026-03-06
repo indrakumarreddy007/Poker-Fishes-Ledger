@@ -1,13 +1,13 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { 
-  Trophy, 
-  History, 
-  PlusCircle, 
-  Wallet, 
-  Download, 
-  Trash2, 
-  Upload, 
-  Check, 
+import {
+  Trophy,
+  History,
+  PlusCircle,
+  Wallet,
+  Download,
+  Trash2,
+  Upload,
+  Check,
   X,
   AlertCircle,
   TrendingUp,
@@ -45,6 +45,14 @@ interface Session {
   results: { name: string; amount: number }[];
 }
 
+interface Settlement {
+  id: number;
+  amount: number;
+  date: string;
+  payer: string;
+  payee: string;
+}
+
 // --- Components ---
 
 const TabButton = ({ active, onClick, icon: Icon, label }: any) => (
@@ -70,11 +78,20 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'sessions' | 'debts'>('dashboard');
   const [players, setPlayers] = useState<Player[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showSettlementModal, setShowSettlementModal] = useState(false);
   const [pendingResults, setPendingResults] = useState<ExtractedResult[]>([]);
   const [sessionNote, setSessionNote] = useState('');
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
+
+  const [settlementData, setSettlementData] = useState({
+    payer: '',
+    payee: '',
+    amount: '',
+    date: new Date().toISOString().split('T')[0]
+  });
 
   useEffect(() => {
     fetchData();
@@ -82,12 +99,14 @@ export default function App() {
 
   const fetchData = async () => {
     try {
-      const [pRes, sRes] = await Promise.all([
+      const [pRes, sRes, stRes] = await Promise.all([
         fetch('/api/players'),
-        fetch('/api/sessions')
+        fetch('/api/sessions'),
+        fetch('/api/settlements')
       ]);
       setPlayers(await pRes.json());
       setSessions(await sRes.json());
+      setSettlements(await stRes.json());
     } catch (error) {
       console.error("Failed to fetch data", error);
     }
@@ -100,11 +119,11 @@ export default function App() {
     setIsUploading(true);
 
     try {
-      if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
-          file.type === 'application/vnd.ms-excel' || 
-          file.name.endsWith('.xlsx') || 
-          file.name.endsWith('.xls')) {
-        
+      if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+        file.type === 'application/vnd.ms-excel' ||
+        file.name.endsWith('.xlsx') ||
+        file.name.endsWith('.xls')) {
+
         const reader = new FileReader();
         reader.onload = async (e) => {
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
@@ -113,7 +132,7 @@ export default function App() {
           const worksheet = workbook.Sheets[firstSheetName];
           const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
           const textData = JSON.stringify(json);
-          
+
           try {
             const results = await extractPokerResults(textData, 'text/plain', true);
             setPendingResults(results);
@@ -149,7 +168,7 @@ export default function App() {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 
+    accept: {
       'image/*': [],
       'application/pdf': [],
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
@@ -190,6 +209,46 @@ export default function App() {
     }
   };
 
+  const handleCreateSettlement = async () => {
+    if (!settlementData.payer || !settlementData.payee || !settlementData.amount) {
+      alert("Please fill in all settlement fields");
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/settlements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...settlementData,
+          amount: parseFloat(settlementData.amount)
+        })
+      });
+      if (response.ok) {
+        setShowSettlementModal(false);
+        setSettlementData({
+          payer: '',
+          payee: '',
+          amount: '',
+          date: new Date().toISOString().split('T')[0]
+        });
+        fetchData();
+      }
+    } catch (error) {
+      alert("Failed to record settlement");
+    }
+  };
+
+  const handleDeleteSettlement = async (id: number) => {
+    if (!confirm("Delete this settlement record?")) return;
+    try {
+      await fetch(`/api/settlements/${id}`, { method: 'DELETE' });
+      fetchData();
+    } catch (error) {
+      alert("Failed to delete settlement");
+    }
+  };
+
   const updatePendingResult = (index: number, field: keyof ExtractedResult, value: string | number) => {
     const newResults = [...pendingResults];
     newResults[index] = { ...newResults[index], [field]: value };
@@ -199,12 +258,12 @@ export default function App() {
   const calculateDebts = () => {
     const winners = players.filter(p => p.total_profit > 0).sort((a, b) => b.total_profit - a.total_profit);
     const losers = players.filter(p => p.total_profit < 0).sort((a, b) => a.total_profit - b.total_profit);
-    
+
     const debts: { from: string, to: string, amount: number }[] = [];
-    
+
     let wIdx = 0;
     let lIdx = 0;
-    
+
     const wBalances = winners.map(p => ({ ...p }));
     const lBalances = losers.map(p => ({ ...p, total_profit: Math.abs(p.total_profit) }));
 
@@ -217,21 +276,21 @@ export default function App() {
           amount: amount
         });
       }
-      
+
       wBalances[wIdx].total_profit -= amount;
       lBalances[lIdx].total_profit -= amount;
-      
+
       if (wBalances[wIdx].total_profit < 0.01) wIdx++;
       if (lBalances[lIdx].total_profit < 0.01) lIdx++;
     }
-    
+
     return debts;
   };
 
   return (
     <div className="min-h-screen text-zinc-100 selection:bg-indigo-500/30">
       <ThreeBackground />
-      
+
       {/* Header */}
       <header className="bg-black/40 backdrop-blur-xl border-b border-white/5 sticky top-0 z-30">
         <div className="max-w-full mx-auto px-6 md:px-12 h-20 flex items-center justify-between">
@@ -244,8 +303,8 @@ export default function App() {
               <p className="text-[10px] text-zinc-500 font-bold tracking-[0.2em] uppercase">Premium Analytics</p>
             </div>
           </div>
-          
-          <button 
+
+          <button
             onClick={() => exportLedgerToPdf(sessions, players)}
             className="flex items-center gap-2 px-5 py-2.5 bg-white text-black rounded-full text-xs font-black uppercase tracking-widest hover:bg-zinc-200 transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-95"
           >
@@ -253,26 +312,26 @@ export default function App() {
             Export PDF
           </button>
         </div>
-        
+
         <div className="max-w-full mx-auto px-6 md:px-12 flex justify-center">
           <div className="flex bg-white/5 rounded-t-xl px-2">
-            <TabButton 
-              active={activeTab === 'dashboard'} 
-              onClick={() => setActiveTab('dashboard')} 
-              icon={Trophy} 
-              label="Leaderboard" 
+            <TabButton
+              active={activeTab === 'dashboard'}
+              onClick={() => setActiveTab('dashboard')}
+              icon={Trophy}
+              label="Leaderboard"
             />
-            <TabButton 
-              active={activeTab === 'sessions'} 
-              onClick={() => setActiveTab('sessions')} 
-              icon={History} 
-              label="Sessions" 
+            <TabButton
+              active={activeTab === 'sessions'}
+              onClick={() => setActiveTab('sessions')}
+              icon={History}
+              label="Sessions"
             />
-            <TabButton 
-              active={activeTab === 'debts'} 
-              onClick={() => setActiveTab('debts')} 
-              icon={Wallet} 
-              label="Debts" 
+            <TabButton
+              active={activeTab === 'debts'}
+              onClick={() => setActiveTab('debts')}
+              icon={Wallet}
+              label="Debts"
             />
           </div>
         </div>
@@ -294,7 +353,7 @@ export default function App() {
                   { icon: History, label: "Total Sessions", value: sessions.length, color: "text-purple-400" },
                   { icon: Trophy, label: "Top Performer", value: players[0]?.name || '-', color: "text-emerald-400" }
                 ].map((stat, i) => (
-                  <motion.div 
+                  <motion.div
                     key={i}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -331,8 +390,8 @@ export default function App() {
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {players.map((player, idx) => (
-                        <motion.tr 
-                          key={player.id} 
+                        <motion.tr
+                          key={player.id}
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           transition={{ delay: idx * 0.05 }}
@@ -342,9 +401,9 @@ export default function App() {
                             <div className={cn(
                               "w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black",
                               idx === 0 ? "bg-yellow-500 text-black shadow-[0_0_15px_rgba(234,179,8,0.3)]" :
-                              idx === 1 ? "bg-zinc-300 text-black" :
-                              idx === 2 ? "bg-orange-600 text-white" :
-                              "bg-white/10 text-zinc-400"
+                                idx === 1 ? "bg-zinc-300 text-black" :
+                                  idx === 2 ? "bg-orange-600 text-white" :
+                                    "bg-white/10 text-zinc-400"
                             )}>
                               {idx + 1}
                             </div>
@@ -384,8 +443,8 @@ export default function App() {
               className="space-y-8"
             >
               {/* Upload Area */}
-              <div 
-                {...getRootProps()} 
+              <div
+                {...getRootProps()}
                 className={cn(
                   "border-2 border-dashed rounded-[2rem] p-16 text-center transition-all cursor-pointer relative overflow-hidden group",
                   isDragActive ? "border-indigo-500 bg-indigo-500/10" : "border-white/10 bg-white/5 hover:border-white/20",
@@ -416,8 +475,8 @@ export default function App() {
                   <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em]">History</div>
                 </div>
                 {sessions.map((session, sIdx) => (
-                  <motion.div 
-                    key={session.id} 
+                  <motion.div
+                    key={session.id}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: sIdx * 0.1 }}
@@ -434,7 +493,7 @@ export default function App() {
                           <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{session.date}</div>
                         </div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => handleDeleteSession(session.id)}
                         className="w-10 h-10 flex items-center justify-center text-zinc-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all"
                       >
@@ -471,15 +530,24 @@ export default function App() {
               className="space-y-8"
             >
               <div className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl overflow-hidden">
-                <div className="px-8 py-6 border-b border-white/5 bg-white/5">
-                  <h2 className="font-black text-xl uppercase italic tracking-tighter">Settlement Plan</h2>
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">Optimized Transaction Matrix</p>
+                <div className="px-8 py-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                  <div>
+                    <h2 className="font-black text-xl uppercase italic tracking-tighter">Settlement Plan</h2>
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">Optimized Transaction Matrix</p>
+                  </div>
+                  <button
+                    onClick={() => setShowSettlementModal(true)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-500 text-white rounded-full text-xs font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] active:scale-95"
+                  >
+                    <PlusCircle size={14} />
+                    Record Settlement
+                  </button>
                 </div>
                 <div className="p-8 space-y-6">
                   {calculateDebts().length > 0 ? (
                     calculateDebts().map((debt, i) => (
-                      <motion.div 
-                        key={i} 
+                      <motion.div
+                        key={i}
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: i * 0.1 }}
@@ -515,6 +583,60 @@ export default function App() {
                   )}
                 </div>
               </div>
+
+              {/* Settlement History */}
+              <div className="space-y-6">
+                <div className="flex items-center justify-between px-4">
+                  <h2 className="font-black text-xl uppercase italic tracking-tighter">Settlement Logs</h2>
+                  <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em]">History</div>
+                </div>
+                {settlements.map((settlement, sIdx) => (
+                  <motion.div
+                    key={settlement.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: sIdx * 0.1 }}
+                    className="bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl overflow-hidden group"
+                  >
+                    <div className="px-8 py-5 flex items-center justify-between">
+                      <div className="flex items-center gap-4 border-r border-white/10 pr-6 mr-2">
+                        <div className="w-12 h-12 rounded-xl bg-white/5 flex flex-col items-center justify-center border border-white/10">
+                          <span className="text-[10px] font-black text-zinc-500 uppercase">{settlement.date.split('-')[1]}</span>
+                          <span className="text-lg font-black leading-none">{settlement.date.split('-')[2]}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-1 items-center justify-between pl-2">
+                        <div className="flex items-center gap-4 w-full">
+                          <div className="flex flex-col flex-1">
+                            <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em]">Payer</span>
+                            <span className="font-black text-lg">{settlement.payer}</span>
+                          </div>
+                          <ChevronRight size={16} className="text-white/40" />
+                          <div className="flex flex-col flex-1 text-right sm:text-left">
+                            <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em]">Payee</span>
+                            <span className="font-black text-lg">{settlement.payee}</span>
+                          </div>
+                          <div className="flex flex-col flex-1 text-right">
+                            <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em]">Amount</span>
+                            <span className="font-mono text-lg font-black text-emerald-400">${Number(settlement.amount).toFixed(2)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteSettlement(settlement.id)}
+                        className="w-10 h-10 ml-6 flex items-center justify-center text-zinc-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+                {settlements.length === 0 && (
+                  <div className="text-center py-10 text-zinc-600 bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10">
+                    <p className="font-black uppercase tracking-widest text-sm text-zinc-500">No settlements recorded yet</p>
+                  </div>
+                )}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -524,14 +646,14 @@ export default function App() {
       <AnimatePresence>
         {showConfirmModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowConfirmModal(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-md" 
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
             />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 40 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 40 }}
@@ -551,8 +673,8 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Session Date</label>
-                    <input 
-                      type="date" 
+                    <input
+                      type="date"
                       value={sessionDate}
                       onChange={(e) => setSessionDate(e.target.value)}
                       className="w-full px-5 py-3 bg-white/5 border border-white/10 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-white font-bold"
@@ -560,8 +682,8 @@ export default function App() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Session Note</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="e.g. High Stakes Night"
                       value={sessionNote}
                       onChange={(e) => setSessionNote(e.target.value)}
@@ -577,29 +699,29 @@ export default function App() {
                   </div>
                   <div className="space-y-3">
                     {pendingResults.map((result, idx) => (
-                      <motion.div 
-                        key={idx} 
+                      <motion.div
+                        key={idx}
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: idx * 0.05 }}
                         className="flex items-center gap-4"
                       >
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           value={result.name}
                           onChange={(e) => updatePendingResult(idx, 'name', e.target.value)}
                           className="flex-1 px-5 py-3 bg-white/5 border border-white/10 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-white font-black italic tracking-tight"
                         />
                         <div className="relative w-40">
                           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-mono font-bold">$</span>
-                          <input 
-                            type="number" 
+                          <input
+                            type="number"
                             value={result.amount}
                             onChange={(e) => updatePendingResult(idx, 'amount', parseFloat(e.target.value))}
                             className="w-full pl-8 pr-5 py-3 bg-white/5 border border-white/10 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-white font-mono font-black text-right"
                           />
                         </div>
-                        <button 
+                        <button
                           onClick={() => setPendingResults(pendingResults.filter((_, i) => i !== idx))}
                           className="w-12 h-12 flex items-center justify-center text-zinc-600 hover:text-rose-500 hover:bg-rose-500/10 rounded-2xl transition-all"
                         >
@@ -608,7 +730,7 @@ export default function App() {
                       </motion.div>
                     ))}
                   </div>
-                  <button 
+                  <button
                     onClick={() => setPendingResults([...pendingResults, { name: '', amount: 0 }])}
                     className="w-full py-4 border-2 border-dashed border-white/10 rounded-2xl text-zinc-500 hover:text-white hover:border-white/20 hover:bg-white/5 transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]"
                   >
@@ -619,13 +741,13 @@ export default function App() {
               </div>
 
               <div className="p-8 bg-white/5 border-t border-white/5 flex gap-4">
-                <button 
+                <button
                   onClick={() => setShowConfirmModal(false)}
                   className="flex-1 py-4 bg-transparent border border-white/10 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white/5 transition-all active:scale-95"
                 >
                   Discard
                 </button>
-                <button 
+                <button
                   onClick={handleSaveSession}
                   className="flex-1 py-4 bg-white text-black rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-zinc-200 transition-all shadow-[0_0_30px_rgba(255,255,255,0.1)] active:scale-95"
                 >
