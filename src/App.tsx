@@ -820,10 +820,10 @@ export default function App() {
                 <select
                   value={settlementData.payer}
                   onChange={(e) => setSettlementData({ ...settlementData, payer: e.target.value })}
-                  className="w-full px-5 py-3 bg-white/5 border border-white/10 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-white font-bold"
+                  className="w-full px-5 py-3 bg-zinc-800 border border-white/10 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-white font-bold"
                 >
-                  <option value="">Select player...</option>
-                  {players.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                  <option value="" style={{ background: '#27272a', color: '#fff' }}>Select player...</option>
+                  {players.map(p => <option key={p.id} value={p.name} style={{ background: '#27272a', color: '#fff' }}>{p.name}</option>)}
                 </select>
               </div>
 
@@ -832,10 +832,10 @@ export default function App() {
                 <select
                   value={settlementData.payee}
                   onChange={(e) => setSettlementData({ ...settlementData, payee: e.target.value })}
-                  className="w-full px-5 py-3 bg-white/5 border border-white/10 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-white font-bold"
+                  className="w-full px-5 py-3 bg-zinc-800 border border-white/10 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-white font-bold"
                 >
-                  <option value="">Select player...</option>
-                  {players.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                  <option value="" style={{ background: '#27272a', color: '#fff' }}>Select player...</option>
+                  {players.map(p => <option key={p.id} value={p.name} style={{ background: '#27272a', color: '#fff' }}>{p.name}</option>)}
                 </select>
               </div>
 
