@@ -8,7 +8,7 @@ export interface ExtractedResult {
 }
 
 export async function extractPokerResults(data: string, mimeType: string, isText: boolean = false): Promise<ExtractedResult[]> {
-  const model = "gemini-1.5-flash";
+  const model = "gemini-1.5-flash-latest";
 
   const prompt = `
     Extract player names and their corresponding profit/loss amounts from this poker session data.
