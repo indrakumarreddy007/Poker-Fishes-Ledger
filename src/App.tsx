@@ -213,6 +213,11 @@ export default function App() {
 
   const handleSaveSession = async () => {
     if (isSaving) return;
+    const validResults = pendingResults.filter(r => r.name.trim() && r.amount !== 0);
+    if (validResults.length === 0) {
+      alert("No players with non-zero amounts. Add at least one entry.");
+      return;
+    }
     setIsSaving(true);
     try {
       const response = await fetch('/api/sessions', {
@@ -221,7 +226,7 @@ export default function App() {
         body: JSON.stringify({
           date: sessionDate,
           note: sessionNote,
-          results: pendingResults.filter(r => r.name.trim() && r.amount !== 0)
+          results: validResults
         })
       });
       if (response.ok) {
