@@ -873,24 +873,24 @@ export default function App() {
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: i * 0.1 }}
-                        className="flex items-center justify-between p-6 bg-white/5 rounded-2xl border border-white/10 group hover:border-white/20 transition-all"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-5 md:p-6 bg-white/5 rounded-2xl border border-white/10 group hover:border-white/20 transition-all gap-3"
                       >
-                        <div className="flex items-center gap-8">
+                        <div className="flex items-center gap-4 md:gap-8">
                           <div className="flex flex-col">
                             <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] mb-1">Debtor</span>
-                            <span className="font-black text-lg tracking-tight">{debt.from}</span>
+                            <span className="font-black text-base md:text-lg tracking-tight">{debt.from}</span>
                           </div>
                           <div className="flex flex-col items-center">
-                            <div className="h-px w-16 bg-gradient-to-r from-transparent via-white/20 to-transparent relative">
+                            <div className="h-px w-8 md:w-16 bg-gradient-to-r from-transparent via-white/20 to-transparent relative">
                               <ChevronRight size={16} className="absolute -right-2 -top-2 text-white/40" />
                             </div>
                           </div>
                           <div className="flex flex-col">
                             <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] mb-1">Recipient</span>
-                            <span className="font-black text-lg tracking-tight">{debt.to}</span>
+                            <span className="font-black text-base md:text-lg tracking-tight">{debt.to}</span>
                           </div>
                         </div>
-                        <div className="text-3xl font-mono font-black text-white tracking-tighter">
+                        <div className="text-2xl md:text-3xl font-mono font-black text-white tracking-tighter">
                           ₹{debt.amount.toFixed(2)}
                         </div>
                       </motion.div>
@@ -920,17 +920,30 @@ export default function App() {
                     transition={{ delay: sIdx * 0.1 }}
                     className="bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl overflow-hidden group"
                   >
-                    <div className="px-8 py-5 flex items-center justify-between">
-                      <div className="flex items-center gap-4 border-r border-white/10 pr-6 mr-2">
+                    <div className="px-4 md:px-8 py-4 md:py-5 flex flex-col sm:flex-row sm:items-center gap-3">
+                      <div className="flex items-center gap-3 sm:border-r sm:border-white/10 sm:pr-4">
                         <div className={cn(
-                          "w-12 h-12 rounded-xl flex flex-col items-center justify-center border",
+                          "w-10 h-10 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center border shrink-0",
                           settlement.status === 'voided' ? "bg-white/5 border-rose-500/20 opacity-50" : "bg-white/5 border-white/10"
                         )}>
-                          <span className="text-[10px] font-black text-zinc-500 uppercase">{monthName(settlement.date.split('-')[1])}</span>
-                          <span className="text-lg font-black leading-none">{settlement.date.split('-')[2]}</span>
+                          <span className="text-[9px] md:text-[10px] font-black text-zinc-500 uppercase">{monthName(settlement.date.split('-')[1])}</span>
+                          <span className="text-base md:text-lg font-black leading-none">{settlement.date.split('-')[2]}</span>
+                        </div>
+                        <div className="flex flex-1 items-center gap-3 sm:hidden">
+                          <div className={cn("flex flex-col", settlement.status === 'voided' && "opacity-50")}>
+                            <span className="font-black text-sm">{settlement.payer}</span>
+                          </div>
+                          <ChevronRight size={14} className="text-white/40 shrink-0" />
+                          <div className={cn("flex flex-col", settlement.status === 'voided' && "opacity-50")}>
+                            <span className="font-black text-sm">{settlement.payee}</span>
+                          </div>
+                          <span className={cn("font-mono text-sm font-black ml-auto", settlement.status === 'voided' ? "text-zinc-500 line-through" : "text-emerald-400")}>
+                            ₹{Number(settlement.amount).toFixed(0)}
+                          </span>
+                          {settlement.status === 'voided' && <span className="text-rose-500 text-[8px] font-black uppercase">Voided</span>}
                         </div>
                       </div>
-                      <div className="flex flex-1 items-center justify-between pl-2">
+                      <div className="hidden sm:flex flex-1 items-center justify-between pl-2">
                         <div className="flex items-center gap-4 w-full">
                           <div className={cn("flex flex-col flex-1", settlement.status === 'voided' && "opacity-50")}>
                             <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em]">Payer</span>
@@ -939,7 +952,7 @@ export default function App() {
                             </span>
                           </div>
                           <ChevronRight size={16} className="text-white/40" />
-                          <div className={cn("flex flex-col flex-1 text-right sm:text-left", settlement.status === 'voided' && "opacity-50")}>
+                          <div className={cn("flex flex-col flex-1", settlement.status === 'voided' && "opacity-50")}>
                             <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em]">Payee</span>
                             <span className={cn("font-black text-lg", settlement.status === 'voided' && "line-through text-zinc-500")}>
                               {settlement.payee}
@@ -960,7 +973,7 @@ export default function App() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex flex-col gap-1 ml-6">
+                      <div className="hidden sm:flex flex-col gap-1 ml-4">
                         {settlement.status !== 'voided' ? (
                           <button
                             onClick={() => handleDeleteSettlement(settlement.id)}
