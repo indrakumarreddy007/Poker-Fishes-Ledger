@@ -15,3 +15,11 @@
 .glass {
   @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-sm;
 }
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

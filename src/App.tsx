@@ -86,12 +86,12 @@ const TabButton = ({ active, onClick, icon: Icon, label }: any) => (
   <button
     onClick={onClick}
     className={cn(
-      "flex items-center gap-2 px-6 py-3 text-sm font-medium transition-all relative group",
+      "flex items-center gap-1.5 px-3 md:px-6 py-3 text-sm font-medium transition-all relative group whitespace-nowrap",
       active ? "text-white" : "text-zinc-500 hover:text-zinc-300"
     )}
   >
-    <Icon size={18} className={cn("transition-transform", active && "scale-110")} />
-    <span className="tracking-wide uppercase text-[10px] font-bold">{label}</span>
+    <Icon size={16} className={cn("transition-transform shrink-0", active && "scale-110")} />
+    <span className="tracking-wide uppercase text-[9px] md:text-[10px] font-bold">{label}</span>
     {active && (
       <motion.div
         layoutId="activeTab"
@@ -450,8 +450,8 @@ export default function App() {
           </button>
         </div>
 
-        <div className="max-w-full mx-auto px-6 md:px-12 flex justify-center">
-          <div className="flex bg-white/5 rounded-t-xl px-2">
+        <div className="max-w-full mx-auto px-2 md:px-12 flex items-center overflow-x-auto scrollbar-hide">
+          <div className="flex bg-white/5 rounded-t-xl px-1 min-w-0 shrink-0">
             <TabButton
               active={activeTab === 'dashboard'}
               onClick={() => setActiveTab('dashboard')}
