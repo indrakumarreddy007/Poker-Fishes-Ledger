@@ -104,6 +104,7 @@ export default function App() {
   const [pendingResults, setPendingResults] = useState<ExtractedResult[]>([]);
   const [sessionNote, setSessionNote] = useState('');
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isManualEntry, setIsManualEntry] = useState(false);
   const [newAliasInputs, setNewAliasInputs] = useState<Record<number, string>>({});
   const [mergeSource, setMergeSource] = useState<number | null>(null);
   const [aliasError, setAliasError] = useState<string | null>(null);
@@ -160,6 +161,7 @@ export default function App() {
           try {
             const results = await extractPokerResults(textData, 'text/plain', true);
             setPendingResults(results);
+            setIsManualEntry(false);
             setShowConfirmModal(true);
           } catch (error: any) {
             setUploadError(error.message || "Failed to process Excel data. Please try again.");
@@ -175,6 +177,7 @@ export default function App() {
           try {
             const results = await extractPokerResults(base64, file.type);
             setPendingResults(results);
+            setIsManualEntry(false);
             setShowConfirmModal(true);
           } catch (error: any) {
             setUploadError(error.message || "Failed to process file. Check that the file contains readable poker session data.");
@@ -288,9 +291,10 @@ export default function App() {
   };
 
   const openManualEntry = () => {
-    setPendingResults([{ name: '', amount: 0 }]);
+    setPendingResults(players.map(p => ({ name: p.name, amount: 0 })));
     setSessionNote('');
     setSessionDate(new Date().toISOString().split('T')[0]);
+    setIsManualEntry(true);
     setShowConfirmModal(true);
   };
 
@@ -942,8 +946,8 @@ export default function App() {
             >
               <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/5">
                 <div>
-                  <h3 className="text-2xl font-black uppercase italic tracking-tighter">{pendingResults.length > 0 && pendingResults[0].name ? 'Verify Results' : 'New Session'}</h3>
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">{pendingResults.length > 0 && pendingResults[0].name ? 'AI Extraction Review' : 'Manual Entry'}</p>
+                  <h3 className="text-2xl font-black uppercase italic tracking-tighter">{isManualEntry ? 'New Session' : 'Verify Results'}</h3>
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">{isManualEntry ? 'Manual Entry' : 'AI Extraction Review'}</p>
                 </div>
                 <button onClick={() => setShowConfirmModal(false)} className="w-10 h-10 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors">
                   <X size={24} />
