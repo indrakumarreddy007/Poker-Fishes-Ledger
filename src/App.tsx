@@ -243,21 +243,26 @@ export default function App() {
   };
 
   const handleDeleteSession = async (id: number) => {
+    if (isSaving) return;
     if (!confirm("Are you sure you want to delete this session?")) return;
+    setIsSaving(true);
     try {
       await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
       fetchData();
     } catch (error) {
       alert("Failed to delete session");
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleCreateSettlement = async () => {
+    if (isSaving) return;
     if (!settlementData.payer || !settlementData.payee || !settlementData.amount) {
       alert("Please fill in all settlement fields");
       return;
     }
-
+    setIsSaving(true);
     try {
       const response = await fetch('/api/settlements', {
         method: 'POST',
@@ -279,24 +284,34 @@ export default function App() {
       }
     } catch (error) {
       alert("Failed to record settlement");
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleDeleteSettlement = async (id: number) => {
+    if (isSaving) return;
+    setIsSaving(true);
     try {
       await fetch(`/api/settlements/${id}`, { method: 'DELETE' });
       fetchData();
     } catch (error) {
       alert("Failed to undo settlement");
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleRestoreSettlement = async (id: number) => {
+    if (isSaving) return;
+    setIsSaving(true);
     try {
       await fetch(`/api/settlements/${id}/restore`, { method: 'PATCH' });
       fetchData();
     } catch (error) {
       alert("Failed to restore settlement");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -342,7 +357,9 @@ export default function App() {
   };
 
   const handleMergePlayer = async (sourceId: number, targetId: number) => {
+    if (isSaving) return;
     if (!confirm("This will merge all sessions and data from the source player into the target. This cannot be undone. Continue?")) return;
+    setIsSaving(true);
     try {
       const res = await fetch('/api/players/merge', {
         method: 'POST',
@@ -354,6 +371,7 @@ export default function App() {
         fetchData();
       }
     } catch { alert("Failed to merge players"); }
+    finally { setIsSaving(false); }
   };
 
   const calculateDebts = () => {
@@ -1165,9 +1183,15 @@ export default function App() {
               </button>
               <button
                 onClick={handleCreateSettlement}
-                className="flex-1 py-4 bg-indigo-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-600 transition-all shadow-[0_0_30px_rgba(79,70,229,0.3)] active:scale-95"
+                disabled={isSaving}
+                className={cn(
+                  "flex-1 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all active:scale-95",
+                  isSaving
+                    ? "bg-zinc-700 text-zinc-500 cursor-not-allowed"
+                    : "bg-indigo-500 text-white hover:bg-indigo-600 shadow-[0_0_30px_rgba(79,70,229,0.3)]"
+                )}
               >
-                Record Payment
+                {isSaving ? 'Saving...' : 'Record Payment'}
               </button>
             </div>
           </div>
