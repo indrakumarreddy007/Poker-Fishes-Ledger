@@ -34,6 +34,11 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function monthName(m: string) {
+  return MONTH_NAMES[parseInt(m, 10) - 1] || m;
+}
+
 // --- Types ---
 interface Player {
   id: number;
@@ -603,7 +608,7 @@ export default function App() {
                     <div className="px-8 py-5 border-b border-white/5 flex items-center bg-white/5">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-white/5 flex flex-col items-center justify-center border border-white/10">
-                          <span className="text-[10px] font-black text-zinc-500 uppercase">{session.date.split('-')[1]}</span>
+                          <span className="text-[10px] font-black text-zinc-500 uppercase">{monthName(session.date.split('-')[1])}</span>
                           <span className="text-lg font-black leading-none">{session.date.split('-')[2]}</span>
                         </div>
                         <div>
@@ -860,7 +865,7 @@ export default function App() {
                           "w-12 h-12 rounded-xl flex flex-col items-center justify-center border",
                           settlement.status === 'voided' ? "bg-white/5 border-rose-500/20 opacity-50" : "bg-white/5 border-white/10"
                         )}>
-                          <span className="text-[10px] font-black text-zinc-500 uppercase">{settlement.date.split('-')[1]}</span>
+                          <span className="text-[10px] font-black text-zinc-500 uppercase">{monthName(settlement.date.split('-')[1])}</span>
                           <span className="text-lg font-black leading-none">{settlement.date.split('-')[2]}</span>
                         </div>
                       </div>
