@@ -747,24 +747,14 @@ export default function App() {
                           <span className="font-black text-lg tracking-tight">{player.name}</span>
                         </div>
                         {!mergeSource && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setMergeSource(player.id)}
-                              title="Merge this player into another"
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg border border-white/5 hover:border-amber-400/20 transition-all"
-                            >
-                              <Merge size={12} />
-                              Merge
-                            </button>
-                            <button
-                              onClick={() => handleDeletePlayer(player.id, player.name)}
-                              title="Delete this player"
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg border border-white/5 hover:border-rose-400/20 transition-all"
-                            >
-                              <Trash2 size={12} />
-                              Delete
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => setMergeSource(player.id)}
+                            title="Merge this player into another"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg border border-white/5 hover:border-amber-400/20 transition-all"
+                          >
+                            <Merge size={12} />
+                            Merge
+                          </button>
                         )}
                         {mergeSource && mergeSource !== player.id && (
                           <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
