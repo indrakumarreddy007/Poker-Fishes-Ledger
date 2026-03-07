@@ -209,7 +209,11 @@ export default function App() {
     multiple: false
   } as any);
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const handleSaveSession = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
     try {
       const response = await fetch('/api/sessions', {
         method: 'POST',
@@ -217,7 +221,7 @@ export default function App() {
         body: JSON.stringify({
           date: sessionDate,
           note: sessionNote,
-          results: pendingResults
+          results: pendingResults.filter(r => r.name.trim() && r.amount !== 0)
         })
       });
       if (response.ok) {
@@ -228,6 +232,8 @@ export default function App() {
       }
     } catch (error) {
       alert("Failed to save session");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1056,15 +1062,15 @@ export default function App() {
                       </button>
                       <button
                         onClick={handleSaveSession}
-                        disabled={!balanced}
+                        disabled={!balanced || isSaving}
                         className={cn(
                           "flex-1 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all active:scale-95",
-                          balanced
+                          balanced && !isSaving
                             ? "bg-white text-black hover:bg-zinc-200 shadow-[0_0_30px_rgba(255,255,255,0.1)]"
                             : "bg-zinc-700 text-zinc-500 cursor-not-allowed"
                         )}
                       >
-                        Finalize Session
+                        {isSaving ? 'Saving...' : 'Finalize Session'}
                       </button>
                     </div>
                   </div>
