@@ -16,7 +16,10 @@ import {
   LayoutDashboard,
   ChevronRight,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Link2,
+  Merge,
+  Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDropzone } from 'react-dropzone';
@@ -54,6 +57,17 @@ interface Settlement {
   status: string;
 }
 
+interface PlayerAlias {
+  id: number;
+  alias: string;
+}
+
+interface PlayerWithAliases {
+  id: number;
+  name: string;
+  aliases: PlayerAlias[];
+}
+
 // --- Components ---
 
 const TabButton = ({ active, onClick, icon: Icon, label }: any) => (
@@ -76,10 +90,11 @@ const TabButton = ({ active, onClick, icon: Icon, label }: any) => (
 );
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'sessions' | 'debts'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'sessions' | 'players' | 'debts'>('dashboard');
   const [players, setPlayers] = useState<Player[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [playersWithAliases, setPlayersWithAliases] = useState<PlayerWithAliases[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -89,6 +104,9 @@ export default function App() {
   const [pendingResults, setPendingResults] = useState<ExtractedResult[]>([]);
   const [sessionNote, setSessionNote] = useState('');
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newAliasInputs, setNewAliasInputs] = useState<Record<number, string>>({});
+  const [mergeSource, setMergeSource] = useState<number | null>(null);
+  const [aliasError, setAliasError] = useState<string | null>(null);
 
   const [settlementData, setSettlementData] = useState({
     payer: '',
@@ -103,14 +121,16 @@ export default function App() {
 
   const fetchData = async () => {
     try {
-      const [pRes, sRes, stRes] = await Promise.all([
+      const [pRes, sRes, stRes, aRes] = await Promise.all([
         fetch('/api/players'),
         fetch('/api/sessions'),
-        fetch('/api/settlements')
+        fetch('/api/settlements'),
+        fetch('/api/players/aliases')
       ]);
       setPlayers(await pRes.json());
       setSessions(await sRes.json());
       setSettlements(await stRes.json());
+      setPlayersWithAliases(await aRes.json());
     } catch (error) {
       console.error("Failed to fetch data", error);
     }
@@ -267,6 +287,55 @@ export default function App() {
     setPendingResults(newResults);
   };
 
+  const openManualEntry = () => {
+    setPendingResults([{ name: '', amount: 0 }]);
+    setSessionNote('');
+    setSessionDate(new Date().toISOString().split('T')[0]);
+    setShowConfirmModal(true);
+  };
+
+  const handleAddAlias = async (playerId: number) => {
+    const alias = newAliasInputs[playerId]?.trim();
+    if (!alias) return;
+    setAliasError(null);
+    try {
+      const res = await fetch(`/api/players/${playerId}/aliases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alias })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        setAliasError(err.error);
+        return;
+      }
+      setNewAliasInputs({ ...newAliasInputs, [playerId]: '' });
+      fetchData();
+    } catch { setAliasError("Failed to add alias"); }
+  };
+
+  const handleRemoveAlias = async (aliasId: number) => {
+    try {
+      await fetch(`/api/players/aliases/${aliasId}`, { method: 'DELETE' });
+      fetchData();
+    } catch { alert("Failed to remove alias"); }
+  };
+
+  const handleMergePlayer = async (sourceId: number, targetId: number) => {
+    if (!confirm("This will merge all sessions and data from the source player into the target. This cannot be undone. Continue?")) return;
+    try {
+      const res = await fetch('/api/players/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId, targetId })
+      });
+      if (res.ok) {
+        setMergeSource(null);
+        fetchData();
+      }
+    } catch { alert("Failed to merge players"); }
+  };
+
   const calculateDebts = () => {
     const winners = players.filter(p => p.total_profit > 0).sort((a, b) => b.total_profit - a.total_profit);
     const losers = players.filter(p => p.total_profit < 0).sort((a, b) => a.total_profit - b.total_profit);
@@ -340,12 +409,28 @@ export default function App() {
               label="Sessions"
             />
             <TabButton
+              active={activeTab === 'players'}
+              onClick={() => setActiveTab('players')}
+              icon={Users}
+              label="Players"
+            />
+            <TabButton
               active={activeTab === 'debts'}
               onClick={() => setActiveTab('debts')}
               icon={Wallet}
               label="Debts"
             />
           </div>
+          {activeTab === 'sessions' && (
+            <button
+              onClick={openManualEntry}
+              type="button"
+              className="ml-4 flex items-center gap-2 px-5 py-2.5 bg-indigo-500 text-white rounded-full text-xs font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] active:scale-95 cursor-pointer"
+            >
+              <Plus size={14} />
+              Manual Entry
+            </button>
+          )}
           {activeTab === 'debts' && (
             <button
               onClick={() => setShowSettlementModal(true)}
@@ -544,6 +629,157 @@ export default function App() {
             </motion.div>
           )}
 
+          {activeTab === 'players' && (
+            <motion.div
+              key="players"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-8"
+            >
+              <div className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl overflow-hidden">
+                <div className="px-8 py-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                  <div>
+                    <h2 className="font-black text-xl uppercase italic tracking-tighter">Player Management</h2>
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">Manage aliases to prevent duplicate players</p>
+                  </div>
+                  {mergeSource && (
+                    <button
+                      onClick={() => setMergeSource(null)}
+                      className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 text-amber-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-amber-500/20"
+                    >
+                      <X size={12} />
+                      Cancel Merge
+                    </button>
+                  )}
+                </div>
+
+                {aliasError && (
+                  <div className="mx-8 mt-6 flex items-center gap-3 px-6 py-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-400 text-sm font-bold">
+                    <AlertCircle size={18} className="shrink-0" />
+                    {aliasError}
+                    <button onClick={() => setAliasError(null)} className="ml-auto"><X size={16} /></button>
+                  </div>
+                )}
+
+                {mergeSource && (
+                  <div className="mx-8 mt-6 flex items-center gap-3 px-6 py-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-300 text-sm font-bold">
+                    <Merge size={18} className="shrink-0" />
+                    Select the target player to merge "{playersWithAliases.find(p => p.id === mergeSource)?.name}" into
+                  </div>
+                )}
+
+                <div className="p-8 space-y-6">
+                  {playersWithAliases.map((player, pIdx) => (
+                    <motion.div
+                      key={player.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: pIdx * 0.05 }}
+                      className={cn(
+                        "p-6 rounded-2xl border transition-all",
+                        mergeSource === player.id
+                          ? "bg-amber-500/10 border-amber-500/30"
+                          : mergeSource
+                            ? "bg-white/5 border-white/10 hover:border-indigo-500/50 cursor-pointer"
+                            : "bg-white/5 border-white/10"
+                      )}
+                      onClick={() => {
+                        if (mergeSource && mergeSource !== player.id) {
+                          handleMergePlayer(mergeSource, player.id);
+                        }
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center font-black text-xs border border-white/10">
+                            {player.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="font-black text-lg tracking-tight">{player.name}</span>
+                        </div>
+                        {!mergeSource && (
+                          <button
+                            onClick={() => setMergeSource(player.id)}
+                            title="Merge this player into another"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg border border-white/5 hover:border-amber-400/20 transition-all"
+                          >
+                            <Merge size={12} />
+                            Merge
+                          </button>
+                        )}
+                        {mergeSource && mergeSource !== player.id && (
+                          <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
+                            Click to merge here
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">
+                          <Link2 size={12} />
+                          Aliases
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {player.aliases.map(a => (
+                            <span
+                              key={a.id}
+                              className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 text-indigo-300 rounded-lg text-xs font-bold border border-indigo-500/20"
+                            >
+                              {a.alias}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleRemoveAlias(a.id); }}
+                                className="hover:text-rose-400 transition-colors"
+                              >
+                                <X size={12} />
+                              </button>
+                            </span>
+                          ))}
+                          {player.aliases.length === 0 && (
+                            <span className="text-xs text-zinc-600 italic">No aliases yet</span>
+                          )}
+                        </div>
+                        <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            placeholder="Add alias (e.g. thor, T-Money)"
+                            value={newAliasInputs[player.id] || ''}
+                            onChange={(e) => setNewAliasInputs({ ...newAliasInputs, [player.id]: e.target.value })}
+                            onKeyDown={(e) => e.key === 'Enter' && handleAddAlias(player.id)}
+                            className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-white text-sm"
+                          />
+                          <button
+                            onClick={() => handleAddAlias(player.id)}
+                            className="px-4 py-2 bg-indigo-500/20 text-indigo-300 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-500/30 transition-all border border-indigo-500/20"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+
+                  {playersWithAliases.length === 0 && (
+                    <div className="text-center py-20 text-zinc-600">
+                      <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6 border border-white/10">
+                        <Users size={40} className="text-zinc-600" />
+                      </div>
+                      <p className="font-black uppercase tracking-widest text-sm">No players yet. Create a session first.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl p-8">
+                <h3 className="font-black text-lg uppercase italic tracking-tighter mb-4">How Aliases Work</h3>
+                <div className="space-y-3 text-sm text-zinc-400">
+                  <p><span className="text-white font-bold">Add aliases</span> — If "John" also plays as "thor" or "J-Money", add those as aliases.</p>
+                  <p><span className="text-white font-bold">Auto-resolve</span> — When importing sessions, any alias is automatically mapped to the real player.</p>
+                  <p><span className="text-white font-bold">Merge players</span> — If duplicates already exist, merge them to combine all their session data.</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {activeTab === 'debts' && (
             <motion.div
               key="debts"
@@ -706,8 +942,8 @@ export default function App() {
             >
               <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/5">
                 <div>
-                  <h3 className="text-2xl font-black uppercase italic tracking-tighter">Verify Results</h3>
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">AI Extraction Review</p>
+                  <h3 className="text-2xl font-black uppercase italic tracking-tighter">{pendingResults.length > 0 && pendingResults[0].name ? 'Verify Results' : 'New Session'}</h3>
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">{pendingResults.length > 0 && pendingResults[0].name ? 'AI Extraction Review' : 'Manual Entry'}</p>
                 </div>
                 <button onClick={() => setShowConfirmModal(false)} className="w-10 h-10 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors">
                   <X size={24} />

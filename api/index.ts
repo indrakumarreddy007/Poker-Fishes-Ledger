@@ -44,6 +44,12 @@ const initDB = async () => {
         status TEXT DEFAULT 'completed'
       );
       
+      CREATE TABLE IF NOT EXISTS player_aliases (
+        id SERIAL PRIMARY KEY,
+        player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+        alias TEXT UNIQUE NOT NULL
+      );
+
       -- Alter existing table to add status column if it doesn't exist
       ALTER TABLE settlements ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'completed';
     `);
@@ -115,10 +121,12 @@ app.post("/api/sessions", async (req, res) => {
     const sessionId = sessionRes.rows[0].id;
 
     for (const result of results) {
+      // Resolve aliases before saving
+      const resolvedName = await resolvePlayerName(client, result.name);
       // Upsert player and get ID
       const playerRes = await client.query(
         "INSERT INTO players (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id",
-        [result.name]
+        [resolvedName]
       );
       const playerId = playerRes.rows[0].id;
 
@@ -230,6 +238,118 @@ app.patch("/api/settlements/:id/restore", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to restore settlement" });
+  }
+});
+
+// --- Player Alias Management ---
+
+// Resolve a name to canonical player name using aliases (case-insensitive)
+async function resolvePlayerName(client: any, name: string): Promise<string> {
+  // Check if this name is a known alias
+  const aliasRes = await client.query(
+    `SELECT p.name FROM player_aliases pa JOIN players p ON pa.player_id = p.id WHERE LOWER(pa.alias) = LOWER($1)`,
+    [name.trim()]
+  );
+  if (aliasRes.rows.length > 0) {
+    return aliasRes.rows[0].name;
+  }
+  return name.trim();
+}
+
+// Get all players with their aliases
+app.get("/api/players/aliases", async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT p.id, p.name,
+        COALESCE(
+          json_agg(json_build_object('id', pa.id, 'alias', pa.alias))
+          FILTER (WHERE pa.id IS NOT NULL), '[]'
+        ) as aliases
+      FROM players p
+      LEFT JOIN player_aliases pa ON pa.player_id = p.id
+      GROUP BY p.id
+      ORDER BY p.name
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to fetch player aliases" });
+  }
+});
+
+// Add an alias to a player
+app.post("/api/players/:id/aliases", async (req, res) => {
+  const { id } = req.params;
+  const { alias } = req.body;
+  if (!alias?.trim()) {
+    return res.status(400).json({ error: "Alias cannot be empty" });
+  }
+  try {
+    // Check if alias conflicts with an existing player name
+    const existing = await pool.query("SELECT id FROM players WHERE LOWER(name) = LOWER($1)", [alias.trim()]);
+    if (existing.rows.length > 0 && existing.rows[0].id !== parseInt(id)) {
+      return res.status(409).json({ error: `"${alias}" is already a player name. Merge them instead by adding "${alias}" as an alias after removing that player.` });
+    }
+    await pool.query(
+      "INSERT INTO player_aliases (player_id, alias) VALUES ($1, $2)",
+      [id, alias.trim()]
+    );
+    res.json({ success: true });
+  } catch (error: any) {
+    if (error?.code === '23505') {
+      return res.status(409).json({ error: "This alias is already mapped to a player." });
+    }
+    console.error(error);
+    res.status(500).json({ error: "Failed to add alias" });
+  }
+});
+
+// Remove an alias
+app.delete("/api/players/aliases/:aliasId", async (req, res) => {
+  try {
+    await pool.query("DELETE FROM player_aliases WHERE id = $1", [req.params.aliasId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to remove alias" });
+  }
+});
+
+// Merge player: reassign all results/settlements from one player to another, then delete
+app.post("/api/players/merge", async (req, res) => {
+  const { sourceId, targetId } = req.body;
+  if (!sourceId || !targetId || sourceId === targetId) {
+    return res.status(400).json({ error: "Invalid merge parameters" });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Get source player name to add as alias
+    const srcRes = await client.query("SELECT name FROM players WHERE id = $1", [sourceId]);
+    if (srcRes.rows.length > 0) {
+      // Add source name as alias of target (ignore if already exists)
+      await client.query(
+        "INSERT INTO player_aliases (player_id, alias) VALUES ($1, $2) ON CONFLICT (alias) DO NOTHING",
+        [targetId, srcRes.rows[0].name]
+      );
+    }
+    // Move all aliases from source to target
+    await client.query("UPDATE player_aliases SET player_id = $1 WHERE player_id = $2", [targetId, sourceId]);
+    // Move session results
+    await client.query("UPDATE session_results SET player_id = $1 WHERE player_id = $2", [targetId, sourceId]);
+    // Move settlements
+    await client.query("UPDATE settlements SET payer_id = $1 WHERE payer_id = $2", [targetId, sourceId]);
+    await client.query("UPDATE settlements SET payee_id = $1 WHERE payee_id = $2", [targetId, sourceId]);
+    // Delete source player
+    await client.query("DELETE FROM players WHERE id = $1", [sourceId]);
+    await client.query("COMMIT");
+    res.json({ success: true });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error(error);
+    res.status(500).json({ error: "Failed to merge players" });
+  } finally {
+    client.release();
   }
 });
 
