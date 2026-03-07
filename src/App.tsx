@@ -71,6 +71,7 @@ interface PlayerWithAliases {
   id: number;
   name: string;
   aliases: PlayerAlias[];
+  session_profit: number;
 }
 
 // --- Components ---
@@ -744,7 +745,15 @@ export default function App() {
                           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center font-black text-xs border border-white/10">
                             {player.name.charAt(0).toUpperCase()}
                           </div>
-                          <span className="font-black text-lg tracking-tight">{player.name}</span>
+                          <div>
+                            <span className="font-black text-lg tracking-tight">{player.name}</span>
+                            <div className={cn(
+                              "font-mono text-sm font-bold",
+                              player.session_profit >= 0 ? "text-emerald-400" : "text-rose-500"
+                            )}>
+                              {player.session_profit >= 0 ? '+' : '-'}₹{Math.abs(player.session_profit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </div>
+                          </div>
                         </div>
                         {!mergeSource && (
                           <button

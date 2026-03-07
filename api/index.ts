@@ -264,7 +264,8 @@ app.get("/api/players/aliases", async (req, res) => {
         COALESCE(
           json_agg(json_build_object('id', pa.id, 'alias', pa.alias))
           FILTER (WHERE pa.id IS NOT NULL), '[]'
-        ) as aliases
+        ) as aliases,
+        COALESCE((SELECT SUM(sr.amount) FROM session_results sr WHERE sr.player_id = p.id), 0) as session_profit
       FROM players p
       LEFT JOIN player_aliases pa ON pa.player_id = p.id
       GROUP BY p.id
