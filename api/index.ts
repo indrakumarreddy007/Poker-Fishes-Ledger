@@ -353,6 +353,27 @@ app.post("/api/players/merge", async (req, res) => {
   }
 });
 
+// Reset all data
+app.post("/api/reset", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("DELETE FROM session_results");
+    await client.query("DELETE FROM settlements");
+    await client.query("DELETE FROM player_aliases");
+    await client.query("DELETE FROM sessions");
+    await client.query("DELETE FROM players");
+    await client.query("COMMIT");
+    res.json({ success: true });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error(error);
+    res.status(500).json({ error: "Failed to reset data" });
+  } finally {
+    client.release();
+  }
+});
+
 // Extract poker results from uploaded file using Gemini AI
 app.post("/api/extract", async (req, res) => {
   const { data, mimeType, isText } = req.body;
