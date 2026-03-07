@@ -749,9 +749,9 @@ export default function App() {
                             <span className="font-black text-lg tracking-tight">{player.name}</span>
                             <div className={cn(
                               "font-mono text-sm font-bold",
-                              player.session_profit >= 0 ? "text-emerald-400" : "text-rose-500"
+                              Number(player.session_profit) >= 0 ? "text-emerald-400" : "text-rose-500"
                             )}>
-                              {player.session_profit >= 0 ? '+' : '-'}₹{Math.abs(player.session_profit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              {Number(player.session_profit) >= 0 ? '+' : '-'}₹{Math.abs(Number(player.session_profit)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </div>
                           </div>
                         </div>
