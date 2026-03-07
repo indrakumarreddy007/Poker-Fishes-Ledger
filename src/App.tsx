@@ -998,11 +998,12 @@ export default function App() {
                           className="flex-1 px-5 py-3 bg-white/5 border border-white/10 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-white font-black italic tracking-tight"
                         />
                         <div className="relative w-40">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-mono font-bold">$</span>
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-mono font-bold">₹</span>
                           <input
                             type="number"
+                            step="any"
                             value={result.amount}
-                            onChange={(e) => updatePendingResult(idx, 'amount', parseFloat(e.target.value))}
+                            onChange={(e) => updatePendingResult(idx, 'amount', e.target.value === '' ? 0 : parseFloat(e.target.value))}
                             className="w-full pl-8 pr-5 py-3 bg-white/5 border border-white/10 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-white font-mono font-black text-right"
                           />
                         </div>
@@ -1025,20 +1026,45 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="p-8 bg-white/5 border-t border-white/5 flex gap-4">
-                <button
-                  onClick={() => setShowConfirmModal(false)}
-                  className="flex-1 py-4 bg-transparent border border-white/10 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white/5 transition-all active:scale-95"
-                >
-                  Discard
-                </button>
-                <button
-                  onClick={handleSaveSession}
-                  className="flex-1 py-4 bg-white text-black rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-zinc-200 transition-all shadow-[0_0_30px_rgba(255,255,255,0.1)] active:scale-95"
-                >
-                  Finalize Session
-                </button>
-              </div>
+              {(() => {
+                const total = pendingResults.reduce((sum, r) => sum + (r.amount || 0), 0);
+                const balanced = Math.abs(total) < 0.01;
+                return (
+                  <div className="p-8 bg-white/5 border-t border-white/5 space-y-4">
+                    <div className={cn(
+                      "flex items-center justify-between px-6 py-3 rounded-2xl border text-sm font-bold",
+                      balanced
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                        : "bg-rose-500/10 border-rose-500/20 text-rose-400"
+                    )}>
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">Session Balance</span>
+                      <span className="font-mono font-black text-lg">
+                        {balanced ? 'Balanced' : `${total >= 0 ? '+' : '-'}₹${Math.abs(total).toFixed(2)} off`}
+                      </span>
+                    </div>
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => setShowConfirmModal(false)}
+                        className="flex-1 py-4 bg-transparent border border-white/10 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white/5 transition-all active:scale-95"
+                      >
+                        Discard
+                      </button>
+                      <button
+                        onClick={handleSaveSession}
+                        disabled={!balanced}
+                        className={cn(
+                          "flex-1 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all active:scale-95",
+                          balanced
+                            ? "bg-white text-black hover:bg-zinc-200 shadow-[0_0_30px_rgba(255,255,255,0.1)]"
+                            : "bg-zinc-700 text-zinc-500 cursor-not-allowed"
+                        )}
+                      >
+                        Finalize Session
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
             </motion.div>
           </div>
         )}
