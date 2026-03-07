@@ -152,10 +152,8 @@ export default function App() {
     try {
       if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
         file.type === 'application/vnd.ms-excel' ||
-        file.type === 'text/csv' ||
         file.name.endsWith('.xlsx') ||
-        file.name.endsWith('.xls') ||
-        file.name.endsWith('.csv')) {
+        file.name.endsWith('.xls')) {
 
         const reader = new FileReader();
         reader.onload = async (e) => {
@@ -207,8 +205,7 @@ export default function App() {
       'image/*': [],
       'application/pdf': [],
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
-      'application/vnd.ms-excel': ['.xls'],
-      'text/csv': ['.csv']
+      'application/vnd.ms-excel': ['.xls']
     },
     multiple: false
   } as any);
@@ -623,7 +620,7 @@ export default function App() {
                   </div>
                   <div>
                     <p className="font-black text-2xl uppercase tracking-tighter italic">Import Session Data</p>
-                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mt-2">Drag & drop Screenshot, PDF, Excel or CSV</p>
+                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mt-2">Drag & drop Screenshot, PDF or Excel</p>
                   </div>
                 </div>
               </div>
