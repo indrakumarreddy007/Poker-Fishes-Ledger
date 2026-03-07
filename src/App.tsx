@@ -19,7 +19,13 @@ import {
   ArrowDownRight,
   Link2,
   Merge,
-  Plus
+  Plus,
+  ScrollText,
+  Clock,
+  Megaphone,
+  Spade,
+  DoorOpen,
+  Handshake
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDropzone } from 'react-dropzone';
@@ -96,7 +102,7 @@ const TabButton = ({ active, onClick, icon: Icon, label }: any) => (
 );
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'sessions' | 'players' | 'debts'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'sessions' | 'players' | 'debts' | 'rules'>('dashboard');
   const [players, setPlayers] = useState<Player[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -469,6 +475,12 @@ export default function App() {
               onClick={() => setActiveTab('debts')}
               icon={Wallet}
               label="Debts"
+            />
+            <TabButton
+              active={activeTab === 'rules'}
+              onClick={() => setActiveTab('rules')}
+              icon={ScrollText}
+              label="Rules"
             />
           </div>
           {activeTab === 'sessions' && (
@@ -976,6 +988,159 @@ export default function App() {
                   </div>
                 )}
               </div>
+            </motion.div>
+          )}
+          {activeTab === 'rules' && (
+            <motion.div
+              key="rules"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-8"
+            >
+              {/* Hero Banner */}
+              <div className="bg-gradient-to-br from-indigo-600/20 via-purple-600/10 to-black/40 backdrop-blur-xl rounded-[2rem] border border-indigo-500/20 shadow-2xl overflow-hidden p-10 text-center relative">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(79,70,229,0.15),transparent_70%)]" />
+                <div className="relative z-10">
+                  <div className="text-6xl mb-4">🎲</div>
+                  <h2 className="font-black text-3xl uppercase italic tracking-tighter bg-gradient-to-r from-white via-indigo-200 to-purple-300 bg-clip-text text-transparent">
+                    Online House Poker Room
+                  </h2>
+                  <p className="text-zinc-400 text-sm font-bold uppercase tracking-[0.3em] mt-3">Official Rules & Etiquette</p>
+                </div>
+              </div>
+
+              {/* Rules Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Minimum Game Time */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl p-8 group hover:border-amber-500/30 transition-all"
+                >
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-14 h-14 bg-amber-500/10 rounded-2xl flex items-center justify-center border border-amber-500/20 group-hover:scale-110 transition-transform">
+                      <Clock size={28} className="text-amber-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-lg uppercase italic tracking-tighter">Minimum Game Time</h3>
+                      <p className="text-[10px] text-amber-400 font-bold uppercase tracking-[0.2em]">3 Hour Commitment</p>
+                    </div>
+                  </div>
+                  <div className="space-y-3 text-sm text-zinc-400">
+                    <p>All players must commit to a <span className="text-white font-bold">minimum of 3 hours</span> of gameplay once seated at the table.</p>
+                    <p>No player may go offline or leave the game in between, except as permitted under the Loss Exit Rule.</p>
+                    <p className="text-amber-300/80">If you have to go offline, you need to increase your playtime by the same amount.</p>
+                  </div>
+                </motion.div>
+
+                {/* Call Announcements */}
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl p-8 group hover:border-blue-500/30 transition-all"
+                >
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-14 h-14 bg-blue-500/10 rounded-2xl flex items-center justify-center border border-blue-500/20 group-hover:scale-110 transition-transform">
+                      <Megaphone size={28} className="text-blue-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-lg uppercase italic tracking-tighter">Call Announcements</h3>
+                      <p className="text-[10px] text-blue-400 font-bold uppercase tracking-[0.2em]">30 Min Notice</p>
+                    </div>
+                  </div>
+                  <div className="space-y-3 text-sm text-zinc-400">
+                    <p>Announcements for upcoming games or table openings will be made <span className="text-white font-bold">30 minutes</span> before the scheduled start time.</p>
+                    <p>Stay tuned to the group for game calls and be ready to join on time.</p>
+                  </div>
+                </motion.div>
+
+                {/* Games Offered */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl p-8 group hover:border-emerald-500/30 transition-all"
+                >
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-14 h-14 bg-emerald-500/10 rounded-2xl flex items-center justify-center border border-emerald-500/20 group-hover:scale-110 transition-transform">
+                      <Spade size={28} className="text-emerald-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-lg uppercase italic tracking-tighter">Games Offered</h3>
+                      <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-[0.2em]">Round-Round Format</p>
+                    </div>
+                  </div>
+                  <div className="space-y-3 text-sm text-zinc-400">
+                    <p>The primary games spread in the house are:</p>
+                    <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-4">
+                      <p className="text-white font-black uppercase tracking-tight">Round-Round</p>
+                      <p className="text-emerald-300/80 text-xs mt-1">Alternating between <span className="font-bold">Texas Hold'em (NLH)</span> and <span className="font-bold">Pot Limit Omaha (PLO)</span></p>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Loss Exit Rule */}
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl p-8 group hover:border-rose-500/30 transition-all"
+                >
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-14 h-14 bg-rose-500/10 rounded-2xl flex items-center justify-center border border-rose-500/20 group-hover:scale-110 transition-transform">
+                      <DoorOpen size={28} className="text-rose-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-lg uppercase italic tracking-tighter">Loss Exit Rule</h3>
+                      <p className="text-[10px] text-rose-400 font-bold uppercase tracking-[0.2em]">Exit When Down</p>
+                    </div>
+                  </div>
+                  <div className="space-y-3 text-sm text-zinc-400">
+                    <p>Players are allowed to <span className="text-white font-bold">leave the table anytime</span> if they are in a loss.</p>
+                    <div className="bg-rose-500/5 border border-rose-500/10 rounded-xl p-4">
+                      <p className="text-rose-300 font-bold text-xs">Leaving is NOT permitted while in profit, even during the committed game time.</p>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* General Etiquette */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl p-8 group hover:border-purple-500/30 transition-all"
+              >
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-14 h-14 bg-purple-500/10 rounded-2xl flex items-center justify-center border border-purple-500/20 group-hover:scale-110 transition-transform">
+                    <Handshake size={28} className="text-purple-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-lg uppercase italic tracking-tighter">General Etiquette</h3>
+                    <p className="text-[10px] text-purple-400 font-bold uppercase tracking-[0.2em]">Play Fair, Play Fun</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                  {[
+                    "Respect all players at the table",
+                    "No slow-rolling or excessive celebration",
+                    "Keep chat clean and friendly",
+                    "Settle debts promptly after the session",
+                    "No coaching or revealing hands during play",
+                    "Be ready when it's your turn to act"
+                  ].map((rule, i) => (
+                    <div key={i} className="flex items-start gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
+                      <div className="w-6 h-6 bg-purple-500/20 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                        <Check size={14} className="text-purple-400" />
+                      </div>
+                      <span className="text-zinc-300">{rule}</span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
