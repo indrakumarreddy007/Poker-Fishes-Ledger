@@ -779,7 +779,7 @@ export default function App() {
                         <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="text"
-                            placeholder="Add alias (e.g. thor, T-Money)"
+                            placeholder="Add alias (e.g. Thor, Odin, Rodagaleme, Deuces)"
                             value={newAliasInputs[player.id] || ''}
                             onChange={(e) => setNewAliasInputs({ ...newAliasInputs, [player.id]: e.target.value })}
                             onKeyDown={(e) => e.key === 'Enter' && handleAddAlias(player.id)}
