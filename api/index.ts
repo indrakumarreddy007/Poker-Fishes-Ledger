@@ -353,6 +353,27 @@ app.post("/api/players/merge", async (req, res) => {
   }
 });
 
+// Delete a player and all their data
+app.delete("/api/players/:id", async (req, res) => {
+  const { id } = req.params;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("DELETE FROM player_aliases WHERE player_id = $1", [id]);
+    await client.query("DELETE FROM session_results WHERE player_id = $1", [id]);
+    await client.query("DELETE FROM settlements WHERE payer_id = $1 OR payee_id = $1", [id]);
+    await client.query("DELETE FROM players WHERE id = $1", [id]);
+    await client.query("COMMIT");
+    res.json({ success: true });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error(error);
+    res.status(500).json({ error: "Failed to delete player" });
+  } finally {
+    client.release();
+  }
+});
+
 // Reset all data
 app.post("/api/reset", async (req, res) => {
   const client = await pool.connect();

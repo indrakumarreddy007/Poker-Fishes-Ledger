@@ -356,6 +356,17 @@ export default function App() {
     } catch { alert("Failed to remove alias"); }
   };
 
+  const handleDeletePlayer = async (playerId: number, playerName: string) => {
+    if (isSaving) return;
+    if (!confirm(`Delete "${playerName}" and all their session data? This cannot be undone.`)) return;
+    setIsSaving(true);
+    try {
+      await fetch(`/api/players/${playerId}`, { method: 'DELETE' });
+      fetchData();
+    } catch { alert("Failed to delete player"); }
+    finally { setIsSaving(false); }
+  };
+
   const handleMergePlayer = async (sourceId: number, targetId: number) => {
     if (isSaving) return;
     if (!confirm("This will merge all sessions and data from the source player into the target. This cannot be undone. Continue?")) return;
@@ -736,14 +747,24 @@ export default function App() {
                           <span className="font-black text-lg tracking-tight">{player.name}</span>
                         </div>
                         {!mergeSource && (
-                          <button
-                            onClick={() => setMergeSource(player.id)}
-                            title="Merge this player into another"
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg border border-white/5 hover:border-amber-400/20 transition-all"
-                          >
-                            <Merge size={12} />
-                            Merge
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setMergeSource(player.id)}
+                              title="Merge this player into another"
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg border border-white/5 hover:border-amber-400/20 transition-all"
+                            >
+                              <Merge size={12} />
+                              Merge
+                            </button>
+                            <button
+                              onClick={() => handleDeletePlayer(player.id, player.name)}
+                              title="Delete this player"
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg border border-white/5 hover:border-rose-400/20 transition-all"
+                            >
+                              <Trash2 size={12} />
+                              Delete
+                            </button>
+                          </div>
                         )}
                         {mergeSource && mergeSource !== player.id && (
                           <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
