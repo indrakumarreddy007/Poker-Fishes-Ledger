@@ -1,11 +1,12 @@
 import express from "express";
 import { Pool } from "pg";
+import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 const app = express();
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "20mb" }));
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -229,6 +230,75 @@ app.patch("/api/settlements/:id/restore", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to restore settlement" });
+  }
+});
+
+// Extract poker results from uploaded file using Gemini AI
+app.post("/api/extract", async (req, res) => {
+  const { data, mimeType, isText } = req.body;
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: "Gemini API key is not configured on the server." });
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const model = "gemini-2.5-flash";
+
+  const prompt = `
+    Extract player names and their corresponding profit/loss amounts from this poker session data.
+    Look for names and numbers (positive for profit, negative for loss).
+    Return the data as a clean JSON array of objects with 'name' and 'amount' properties.
+    If a name looks like an alias or is misspelled, keep it as is; the user will correct it.
+  `;
+
+  const parts: any[] = [{ text: prompt }];
+
+  if (isText) {
+    parts.push({ text: data });
+  } else {
+    // data is a base64 data URL like "data:application/pdf;base64,..."
+    const base64Data = data.includes(",") ? data.split(",")[1] : data;
+    parts.push({
+      inlineData: {
+        mimeType: mimeType,
+        data: base64Data,
+      },
+    });
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: "user", parts }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              amount: { type: Type.NUMBER },
+            },
+            required: ["name", "amount"],
+          },
+        },
+      },
+    });
+
+    const results = JSON.parse(response.text || "[]");
+    res.json(results);
+  } catch (error: any) {
+    console.error("Gemini API Error:", error);
+    const msg = error?.message || "";
+    if (msg.includes("API key")) {
+      return res.status(401).json({ error: "Invalid or missing Gemini API key." });
+    }
+    if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
+      return res.status(429).json({ error: "Gemini API rate limit exceeded. Please wait a moment and try again, or check your API key quota at https://aistudio.google.com/apikey." });
+    }
+    res.status(500).json({ error: "Failed to process file with AI. Please try again." });
   }
 });
 
