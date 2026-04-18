@@ -1,0 +1,43 @@
+{
+  "name": "poker-ledger-merged",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "vite build",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@react-three/fiber": "^8.17.10",
+    "@react-three/drei": "^9.120.3",
+    "three": "^0.170.0",
+    "motion": "^12.0.0",
+    "react-dropzone": "^14.3.5",
+    "xlsx": "^0.18.5",
+    "@google/genai": "^1.29.0",
+    "pg": "^8.13.1",
+    "express": "^4.21.2",
+    "dotenv": "^16.4.7",
+    "lucide-react": "^0.468.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.6.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@tailwindcss/vite": "^4.0.14",
+    "tailwindcss": "^4.0.14",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.10",
+    "@types/three": "^0.170.0",
+    "@types/express": "^5.0.0"
+  }
+}
