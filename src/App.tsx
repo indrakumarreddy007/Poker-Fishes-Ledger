@@ -34,7 +34,6 @@ import { extractPokerResults, ExtractedResult } from './services/geminiService';
 import { exportLedgerToPdf } from './utils/pdfExport';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import ThreeBackground from './components/ThreeBackground';
 import * as XLSX from 'xlsx';
 import LiveLogin from './views/LiveLogin';
 import LiveLobby from './views/LiveLobby';
@@ -517,8 +516,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen text-zinc-100 selection:bg-indigo-500/30">
-      <ThreeBackground />
+    <div className="min-h-screen text-zinc-100 selection:bg-indigo-500/30 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
 
       {/* Header */}
       <header className="bg-black/40 backdrop-blur-xl border-b border-white/5 sticky top-0 z-30">
