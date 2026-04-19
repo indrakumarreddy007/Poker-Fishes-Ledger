@@ -12,16 +12,32 @@ app.use(express.json({ limit: "20mb" }));
 const LOCAL_HOSTS = ["localhost", "127.0.0.1", "::1", "host.docker.internal"];
 const isLocalDb = LOCAL_HOSTS.some((h) => process.env.DATABASE_URL?.includes(h));
 
+// Extract host:port for boot-time logging without leaking credentials.
+// Matches the host/port segment of a postgres URL, tolerates missing port.
+function dbTargetForLog(url: string | undefined): string {
+  if (!url) return "<unset>";
+  const m = url.match(/@([^/?#]+)/);
+  return m ? m[1] : "<unparseable>";
+}
+
+console.log(`[db] target: ${dbTargetForLog(process.env.DATABASE_URL)} (ssl: ${isLocalDb ? "off" : "on"})`);
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: isLocalDb ? false : { rejectUnauthorized: false },
 });
+
+// Track whether initDB ever succeeded. Used by the /api/live middleware to
+// short-circuit requests with 503 when the DB is known-unhealthy, rather than
+// letting them hit the pool and bubble 500s.
+let dbReady = false;
 
 // Surface pool-level errors (e.g. idle client disconnects) without crashing the
 // process. Without this handler, emitted 'error' events on the Pool become
 // uncaught exceptions.
 pool.on("error", (err) => {
   console.error("[db] pool error:", err.message);
+  dbReady = false;
 });
 
 // ---------------------------------------------------------------------------
@@ -116,9 +132,11 @@ const initDB = async () => {
       CREATE INDEX IF NOT EXISTS idx_live_sp_session      ON live_session_players(session_id);
       CREATE INDEX IF NOT EXISTS idx_live_sp_user         ON live_session_players(user_id);
     `);
+    dbReady = true;
+    console.log("[db] initDB ok — schema verified");
   } catch (err) {
     // Keep the server process alive even when Postgres is unreachable at
-    // boot. Routes that need the DB will still fail with 500s, but at least
+    // boot. Routes that need the DB will still fail with 503s, but at least
     // the static SPA loads and the user sees a degraded UI instead of a
     // blank page.
     console.error("[db] initDB failed — server will stay up, API calls will fail until DB is reachable:", err instanceof Error ? err.message : err);
@@ -482,6 +500,16 @@ Return a JSON array of objects with 'name' (string) and 'amount' (number, positi
 // ===========================================================================
 // ── LIVE (THOR) ROUTES — all under /api/live/ ───────────────────────────────
 // ===========================================================================
+
+// Short-circuit Live routes with 503 when the DB never initialised or has
+// dropped. 503 (not 500) is the honest code for "backend dep dead" and lets
+// the frontend distinguish a backend outage from a real bug.
+app.use("/api/live", (_req, res, next) => {
+  if (!dbReady) {
+    return res.status(503).json({ error: "database unavailable" });
+  }
+  next();
+});
 
 // Helper: generate random 6-char alphanumeric session code
 function generateCode(): string {
