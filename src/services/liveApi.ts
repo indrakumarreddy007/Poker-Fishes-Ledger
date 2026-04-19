@@ -23,6 +23,8 @@ export interface LiveSession {
   createdAt: number;
   closedAt?: number;
   blindValue?: string;
+  publishedToLedger: boolean;
+  publishedSessionId: number | null;
 }
 
 export interface LiveSessionPlayer {
@@ -81,6 +83,9 @@ const mapSession = (s: any): LiveSession => ({
   createdAt: new Date(s.created_at).getTime(),
   closedAt: s.closed_at ? new Date(s.closed_at).getTime() : undefined,
   blindValue: s.blind_value,
+  publishedToLedger: s.published_to_ledger === true,
+  publishedSessionId:
+    s.published_session_id == null ? null : Number(s.published_session_id),
 });
 
 const mapPlayer = (p: any): LiveSessionPlayer => ({
@@ -251,6 +256,31 @@ export const liveApi = {
       body: JSON.stringify({ sessionId, userId, winnings }),
     });
     return res.ok;
+  },
+
+  publishToLedger: async (
+    sessionId: string
+  ): Promise<
+    | { success: true; fishesSessionId: number; alreadyPublished?: boolean }
+    | { success: false; error: string }
+  > => {
+    const res = await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const contentType = res.headers.get('content-type') || '';
+    const body = contentType.includes('application/json') ? await res.json() : {};
+    if (res.status === 409 && body.alreadyPublished) {
+      return {
+        success: true,
+        fishesSessionId: Number(body.fishesSessionId) || 0,
+        alreadyPublished: true,
+      };
+    }
+    if (!res.ok) {
+      return { success: false, error: body.error || `Publish failed (${res.status})` };
+    }
+    return { success: true, fishesSessionId: Number(body.fishesSessionId) };
   },
 
   getUserStats: async (userId: string): Promise<LivePlayerStats> => {

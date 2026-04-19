@@ -95,6 +95,12 @@ CREATE TABLE IF NOT EXISTS live_buy_ins (
   timestamp  TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Publish-to-Fishes flags on live_sessions (back-filled for existing rows via
+-- ADD COLUMN IF NOT EXISTS so this is safe to re-run).
+ALTER TABLE live_sessions
+  ADD COLUMN IF NOT EXISTS published_to_ledger   BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS published_session_id  INTEGER REFERENCES sessions(id) ON DELETE SET NULL;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_live_sessions_code      ON live_sessions(session_code);
 CREATE INDEX IF NOT EXISTS idx_live_buy_ins_session    ON live_buy_ins(session_id);

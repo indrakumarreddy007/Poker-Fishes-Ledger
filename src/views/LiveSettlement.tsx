@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { liveApi, LiveUser, LiveSettlementTx } from '../services/liveApi';
 import { computePlayerResults, computeSettlements } from '../lib/settlement';
-import { ArrowRight, Trophy, Coins, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Trophy, Coins, CheckCircle2, Upload, Check } from 'lucide-react';
 
 interface Props {
   user: LiveUser;
@@ -15,6 +15,8 @@ export default function LiveSettlement({ user, sessionId, navigate }: Props) {
     players: any[];
     buyIns: any[];
   }>({ session: null, players: [], buyIns: [] });
+  const [publishState, setPublishState] = useState<'idle' | 'loading' | 'done'>('idle');
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -25,10 +27,30 @@ export default function LiveSettlement({ user, sessionId, navigate }: Props) {
           players: result.players,
           buyIns: result.buyIns.filter((b) => b.status === 'approved'),
         });
+        if (result.session.publishedToLedger) setPublishState('done');
       }
     };
     load();
   }, [sessionId]);
+
+  const handlePublish = async () => {
+    if (!data.session) return;
+    setPublishError(null);
+    setPublishState('loading');
+    const result = await liveApi.publishToLedger(data.session.id);
+    if (result.success) {
+      setPublishState('done');
+      setData((d) => ({
+        ...d,
+        session: d.session
+          ? { ...d.session, publishedToLedger: true, publishedSessionId: result.fishesSessionId }
+          : d.session,
+      }));
+    } else {
+      setPublishError(result.error);
+      setPublishState('idle');
+    }
+  };
 
   const results = useMemo(
     () => computePlayerResults(data.players, data.buyIns),
@@ -129,6 +151,52 @@ export default function LiveSettlement({ user, sessionId, navigate }: Props) {
           )}
         </div>
       </section>
+
+      {/* Publish to Leaderboard — host only */}
+      {data.session.createdBy === user.id && (
+        <section className="flex flex-col items-center gap-2 pt-2">
+          {publishState === 'done' ? (
+            <>
+              <button
+                type="button"
+                disabled
+                className="px-8 py-4 bg-slate-800 border border-slate-700 rounded-2xl font-bold text-slate-400 cursor-not-allowed flex items-center gap-2"
+              >
+                <Check className="w-4 h-4" /> Already Published
+              </button>
+              {data.session.publishedSessionId != null && (
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  Fishes session #{data.session.publishedSessionId}
+                </p>
+              )}
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={handlePublish}
+              disabled={publishState === 'loading'}
+              className="px-8 py-4 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-wait text-slate-950 font-black rounded-2xl transition-all shadow-xl shadow-emerald-500/20 active:scale-95 flex items-center gap-2"
+            >
+              {publishState === 'loading' ? (
+                <>
+                  <span className="inline-block w-4 h-4 border-2 border-slate-950/40 border-t-slate-950 rounded-full animate-spin" />
+                  Publishing…
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  Publish to Leaderboard
+                </>
+              )}
+            </button>
+          )}
+          {publishError && (
+            <p className="text-rose-400 text-xs font-bold uppercase tracking-wider text-center max-w-md">
+              {publishError}
+            </p>
+          )}
+        </section>
+      )}
 
       <div className="flex justify-center pt-4">
         <button

@@ -40,6 +40,7 @@ import LiveLobby from './views/LiveLobby';
 import LiveSessionAdmin from './views/LiveSessionAdmin';
 import LiveSessionPlayer from './views/LiveSessionPlayer';
 import LiveSettlement from './views/LiveSettlement';
+import PlayerHistoryModal from './components/PlayerHistoryModal';
 import type { LiveUser } from './services/liveApi';
 
 function cn(...inputs: ClassValue[]) {
@@ -133,6 +134,8 @@ export default function App() {
     amount: '',
     date: new Date().toISOString().split('T')[0]
   });
+
+  const [selectedPlayer, setSelectedPlayer] = useState<{ id: number; name: string } | null>(null);
 
   // --- Live Play state ---
   const [liveUser, setLiveUser] = useState<LiveUser | null>(null);
@@ -660,7 +663,17 @@ export default function App() {
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           transition={{ delay: idx * 0.05 }}
-                          className="hover:bg-white/5 transition-colors group"
+                          onClick={() => setSelectedPlayer({ id: player.id, name: player.name })}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setSelectedPlayer({ id: player.id, name: player.name });
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Show P/L history for ${player.name}`}
+                          className="hover:bg-white/5 transition-colors group cursor-pointer focus:outline-none focus:bg-white/5"
                         >
                           <td className="px-8 py-6">
                             <div className={cn(
@@ -1502,6 +1515,14 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedPlayer && (
+        <PlayerHistoryModal
+          playerId={selectedPlayer.id}
+          playerName={selectedPlayer.name}
+          onClose={() => setSelectedPlayer(null)}
+        />
       )}
     </div>
   );
