@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { liveApi, LiveUser, LiveSettlementTx } from '../services/liveApi';
+import { computePlayerResults, computeSettlements } from '../lib/settlement';
 import { ArrowRight, Trophy, Coins, CheckCircle2 } from 'lucide-react';
 
 interface Props {
@@ -29,44 +30,15 @@ export default function LiveSettlement({ user, sessionId, navigate }: Props) {
     load();
   }, [sessionId]);
 
-  const results = useMemo(() => {
-    return data.players
-      .map((p) => {
-        const totalBuyIn = data.buyIns
-          .filter((b) => b.userId === p.userId)
-          .reduce((sum, b) => sum + b.amount, 0);
-        const winnings = p.finalWinnings != null ? parseFloat(p.finalWinnings) : 0;
-        return {
-          userId:   p.userId,
-          name:     p.name,
-          buyIn:    totalBuyIn,
-          winnings,
-          net:      winnings - totalBuyIn,
-        };
-      })
-      .sort((a, b) => b.net - a.net);
-  }, [data]);
+  const results = useMemo(
+    () => computePlayerResults(data.players, data.buyIns),
+    [data]
+  );
 
-  const settlements = useMemo((): LiveSettlementTx[] => {
-    const givers    = results.filter((r) => r.net < 0).map((r) => ({ ...r, net: Math.abs(r.net) }));
-    const receivers = results.filter((r) => r.net > 0).map((r) => ({ ...r }));
-    const txs: LiveSettlementTx[] = [];
-    let gi = 0;
-    let ri = 0;
-    const g = givers.map((x) => ({ ...x }));
-    const r = receivers.map((x) => ({ ...x }));
-    while (gi < g.length && ri < r.length) {
-      const payment = Math.min(g[gi].net, r[ri].net);
-      if (payment > 0) {
-        txs.push({ from: g[gi].name, to: r[ri].name, amount: Math.round(payment * 100) / 100 });
-      }
-      g[gi].net -= payment;
-      r[ri].net -= payment;
-      if (g[gi].net < 0.01) gi++;
-      if (r[ri].net < 0.01) ri++;
-    }
-    return txs;
-  }, [results]);
+  const settlements = useMemo<LiveSettlementTx[]>(
+    () => computeSettlements(results),
+    [results]
+  );
 
   if (!data.session) {
     return (
