@@ -108,8 +108,12 @@ const TabButton = ({ active, onClick, icon: Icon, label }: any) => (
   </button>
 );
 
+type TabId = 'dashboard' | 'sessions' | 'livePlay' | 'players' | 'debts' | 'rules';
+const TAB_ORDER: TabId[] = ['dashboard', 'sessions', 'livePlay', 'players', 'debts', 'rules'];
+const SWIPE_THRESHOLD = 60;
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'sessions' | 'players' | 'debts' | 'rules' | 'livePlay'>('dashboard');
+  const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [players, setPlayers] = useState<Player[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -518,6 +522,49 @@ export default function App() {
     return debts;
   };
 
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const swipeAxis = useRef<'pending' | 'horizontal' | 'vertical'>('pending');
+
+  const shouldIgnoreSwipeTarget = (target: EventTarget | null) => {
+    if (!(target instanceof Element)) return false;
+    if (target.closest('input, textarea, select, [contenteditable="true"]')) return true;
+    if (target.closest('[role="dialog"]')) return true;
+    return false;
+  };
+
+  const onSwipeStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1 || shouldIgnoreSwipeTarget(e.target)) {
+      swipeStart.current = null;
+      return;
+    }
+    const t = e.touches[0];
+    swipeStart.current = { x: t.clientX, y: t.clientY };
+    swipeAxis.current = 'pending';
+  };
+
+  const onSwipeMove = (e: React.TouchEvent) => {
+    if (!swipeStart.current || swipeAxis.current === 'vertical') return;
+    const t = e.touches[0];
+    const dx = t.clientX - swipeStart.current.x;
+    const dy = t.clientY - swipeStart.current.y;
+    if (swipeAxis.current === 'pending' && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+      swipeAxis.current = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical';
+    }
+  };
+
+  const onSwipeEnd = (e: React.TouchEvent) => {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    if (!start || swipeAxis.current !== 'horizontal') return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+    const currentIdx = TAB_ORDER.indexOf(activeTab);
+    const nextIdx = dx < 0 ? currentIdx + 1 : currentIdx - 1;
+    if (nextIdx < 0 || nextIdx >= TAB_ORDER.length) return;
+    setActiveTab(TAB_ORDER[nextIdx]);
+  };
+
   return (
     <div className="min-h-screen text-zinc-100 selection:bg-indigo-500/30 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
 
@@ -605,7 +652,12 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-full mx-auto px-6 md:px-12 py-12 relative z-10">
+      <main
+        className="max-w-full mx-auto px-6 md:px-12 py-12 relative z-10 touch-pan-y"
+        onTouchStart={onSwipeStart}
+        onTouchMove={onSwipeMove}
+        onTouchEnd={onSwipeEnd}
+      >
         <AnimatePresence mode="wait">
           {activeTab === 'dashboard' && (
             <motion.div
