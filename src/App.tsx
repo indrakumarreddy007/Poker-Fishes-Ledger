@@ -524,6 +524,7 @@ export default function App() {
 
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
   const swipeAxis = useRef<'pending' | 'horizontal' | 'vertical'>('pending');
+  const [isTabSwitching, setIsTabSwitching] = useState(false);
 
   const shouldIgnoreSwipeTarget = (target: EventTarget | null) => {
     if (!(target instanceof Element)) return false;
@@ -533,7 +534,12 @@ export default function App() {
   };
 
   const onSwipeStart = (e: React.TouchEvent) => {
-    if (e.touches.length !== 1 || shouldIgnoreSwipeTarget(e.target)) {
+    // Live Play has its own internal tab UI; don't hijack swipes there.
+    if (activeTab === 'livePlay') {
+      swipeStart.current = null;
+      return;
+    }
+    if (isTabSwitching || e.touches.length !== 1 || shouldIgnoreSwipeTarget(e.target)) {
       swipeStart.current = null;
       return;
     }
@@ -562,6 +568,7 @@ export default function App() {
     const currentIdx = TAB_ORDER.indexOf(activeTab);
     const nextIdx = dx < 0 ? currentIdx + 1 : currentIdx - 1;
     if (nextIdx < 0 || nextIdx >= TAB_ORDER.length) return;
+    setIsTabSwitching(true);
     setActiveTab(TAB_ORDER[nextIdx]);
   };
 
@@ -658,7 +665,7 @@ export default function App() {
         onTouchMove={onSwipeMove}
         onTouchEnd={onSwipeEnd}
       >
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" onExitComplete={() => setIsTabSwitching(false)}>
           {activeTab === 'dashboard' && (
             <motion.div
               key="dashboard"
