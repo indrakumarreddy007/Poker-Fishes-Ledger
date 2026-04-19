@@ -530,7 +530,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-black text-xl tracking-tighter uppercase italic">Poker Fishes Ledger</h1>
-              <p className="text-[10px] text-zinc-500 font-bold tracking-[0.2em] uppercase">Premium Analytics</p>
+              <p className="hidden sm:block text-[10px] text-zinc-500 font-bold tracking-[0.2em] uppercase">Premium Analytics</p>
             </div>
           </div>
 
@@ -558,6 +558,12 @@ export default function App() {
               label="Sessions"
             />
             <TabButton
+              active={activeTab === 'livePlay'}
+              onClick={() => setActiveTab('livePlay')}
+              icon={Zap}
+              label="Live Play"
+            />
+            <TabButton
               active={activeTab === 'players'}
               onClick={() => setActiveTab('players')}
               icon={Users}
@@ -574,12 +580,6 @@ export default function App() {
               onClick={() => setActiveTab('rules')}
               icon={ScrollText}
               label="Rules"
-            />
-            <TabButton
-              active={activeTab === 'livePlay'}
-              onClick={() => setActiveTab('livePlay')}
-              icon={Zap}
-              label="Live Play"
             />
           </div>
           {activeTab === 'sessions' && (
@@ -640,14 +640,14 @@ export default function App() {
               </div>
 
               <div className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl overflow-hidden">
-                <div className="px-8 py-6 border-b border-white/5 flex items-center justify-between bg-white/5">
+                <div className="px-4 md:px-8 py-6 border-b border-white/5 flex items-center justify-between bg-white/5">
                   <h2 className="font-black text-xl uppercase italic tracking-tighter">Leaderboard</h2>
                   <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
                     <TrendingUp size={12} className="text-emerald-500" />
                     Live Rankings
                   </div>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
                       <tr className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.2em]">
@@ -708,6 +708,41 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
+
+                <ul className="md:hidden divide-y divide-white/5">
+                  {players.map((player, idx) => (
+                    <motion.li
+                      key={player.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className="px-4 py-4 hover:bg-white/5 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={cn(
+                          "w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-black shrink-0",
+                          idx === 0 ? "bg-yellow-500 text-black shadow-[0_0_15px_rgba(234,179,8,0.3)]" :
+                            idx === 1 ? "bg-zinc-300 text-black" :
+                              idx === 2 ? "bg-orange-600 text-white" :
+                                "bg-white/10 text-zinc-400"
+                        )}>
+                          {idx + 1}
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center font-black text-[11px] border border-white/10 shrink-0">
+                          {player.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="font-bold text-sm tracking-tight truncate min-w-0 flex-1">{player.name}</span>
+                      </div>
+                      <div className={cn(
+                        "mt-2 text-right font-mono text-2xl font-black tracking-tighter flex items-center justify-end gap-1.5",
+                        player.total_profit >= 0 ? "text-emerald-400" : "text-rose-500"
+                      )}>
+                        {player.total_profit >= 0 ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
+                        {player.total_profit >= 0 ? '+' : '-'}₹{Math.abs(player.total_profit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </div>
+                    </motion.li>
+                  ))}
+                </ul>
               </div>
             </motion.div>
           )}
@@ -767,7 +802,7 @@ export default function App() {
                     transition={{ delay: sIdx * 0.1 }}
                     className="bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl overflow-hidden group"
                   >
-                    <div className="px-8 py-5 border-b border-white/5 flex items-center bg-white/5">
+                    <div className="px-4 md:px-8 py-5 border-b border-white/5 flex items-center bg-white/5">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-white/5 flex flex-col items-center justify-center border border-white/10">
                           <span className="text-[10px] font-black text-zinc-500 uppercase">{monthName(session.date.split('-')[1])}</span>
@@ -809,7 +844,7 @@ export default function App() {
               className="space-y-8"
             >
               <div className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl overflow-hidden">
-                <div className="px-8 py-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                <div className="px-4 md:px-8 py-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
                   <div>
                     <h2 className="font-black text-xl uppercase italic tracking-tighter">Player Management</h2>
                     <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">Manage aliases to prevent duplicate players</p>
@@ -968,7 +1003,7 @@ export default function App() {
               className="space-y-8"
             >
               <div className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl overflow-hidden relative z-20">
-                <div className="px-8 py-6 border-b border-white/5 bg-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-30">
+                <div className="px-4 md:px-8 py-6 border-b border-white/5 bg-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-30">
                   <div>
                     <h2 className="font-black text-xl uppercase italic tracking-tighter">Settlement Plan</h2>
                     <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">Optimized Transaction Matrix</p>
@@ -1308,7 +1343,7 @@ export default function App() {
               </div>
 
               <div className="p-8 overflow-y-auto space-y-8">
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Session Date</label>
                     <input
