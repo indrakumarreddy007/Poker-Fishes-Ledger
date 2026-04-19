@@ -108,8 +108,12 @@ const TabButton = ({ active, onClick, icon: Icon, label }: any) => (
   </button>
 );
 
+type TabId = 'dashboard' | 'sessions' | 'livePlay' | 'players' | 'debts' | 'rules';
+const TAB_ORDER: TabId[] = ['dashboard', 'sessions', 'livePlay', 'players', 'debts', 'rules'];
+const SWIPE_THRESHOLD = 60;
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'sessions' | 'players' | 'debts' | 'rules' | 'livePlay'>('dashboard');
+  const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [players, setPlayers] = useState<Player[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -136,6 +140,13 @@ export default function App() {
   });
 
   const [selectedPlayer, setSelectedPlayer] = useState<{ id: number; name: string } | null>(null);
+  const handlePlayerClick = (player: Player) => setSelectedPlayer({ id: player.id, name: player.name });
+  const handlePlayerKey = (e: React.KeyboardEvent, player: Player) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handlePlayerClick(player);
+    }
+  };
 
   // --- Live Play state ---
   const [liveUser, setLiveUser] = useState<LiveUser | null>(null);
@@ -518,6 +529,56 @@ export default function App() {
     return debts;
   };
 
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const swipeAxis = useRef<'pending' | 'horizontal' | 'vertical'>('pending');
+  const [isTabSwitching, setIsTabSwitching] = useState(false);
+
+  const shouldIgnoreSwipeTarget = (target: EventTarget | null) => {
+    if (!(target instanceof Element)) return false;
+    if (target.closest('input, textarea, select, [contenteditable="true"]')) return true;
+    if (target.closest('[role="dialog"]')) return true;
+    return false;
+  };
+
+  const onSwipeStart = (e: React.TouchEvent) => {
+    // Live Play has its own internal tab UI; don't hijack swipes there.
+    if (activeTab === 'livePlay') {
+      swipeStart.current = null;
+      return;
+    }
+    if (isTabSwitching || e.touches.length !== 1 || shouldIgnoreSwipeTarget(e.target)) {
+      swipeStart.current = null;
+      return;
+    }
+    const t = e.touches[0];
+    swipeStart.current = { x: t.clientX, y: t.clientY };
+    swipeAxis.current = 'pending';
+  };
+
+  const onSwipeMove = (e: React.TouchEvent) => {
+    if (!swipeStart.current || swipeAxis.current === 'vertical') return;
+    const t = e.touches[0];
+    const dx = t.clientX - swipeStart.current.x;
+    const dy = t.clientY - swipeStart.current.y;
+    if (swipeAxis.current === 'pending' && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+      swipeAxis.current = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical';
+    }
+  };
+
+  const onSwipeEnd = (e: React.TouchEvent) => {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    if (!start || swipeAxis.current !== 'horizontal') return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+    const currentIdx = TAB_ORDER.indexOf(activeTab);
+    const nextIdx = dx < 0 ? currentIdx + 1 : currentIdx - 1;
+    if (nextIdx < 0 || nextIdx >= TAB_ORDER.length) return;
+    setIsTabSwitching(true);
+    setActiveTab(TAB_ORDER[nextIdx]);
+  };
+
   return (
     <div className="min-h-screen text-zinc-100 selection:bg-indigo-500/30 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
 
@@ -530,7 +591,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-black text-xl tracking-tighter uppercase italic">Poker Fishes Ledger</h1>
-              <p className="text-[10px] text-zinc-500 font-bold tracking-[0.2em] uppercase">Premium Analytics</p>
+              <p className="hidden sm:block text-[10px] text-zinc-500 font-bold tracking-[0.2em] uppercase">Premium Analytics</p>
             </div>
           </div>
 
@@ -558,6 +619,12 @@ export default function App() {
               label="Sessions"
             />
             <TabButton
+              active={activeTab === 'livePlay'}
+              onClick={() => setActiveTab('livePlay')}
+              icon={Zap}
+              label="Live Play"
+            />
+            <TabButton
               active={activeTab === 'players'}
               onClick={() => setActiveTab('players')}
               icon={Users}
@@ -574,12 +641,6 @@ export default function App() {
               onClick={() => setActiveTab('rules')}
               icon={ScrollText}
               label="Rules"
-            />
-            <TabButton
-              active={activeTab === 'livePlay'}
-              onClick={() => setActiveTab('livePlay')}
-              icon={Zap}
-              label="Live Play"
             />
           </div>
           {activeTab === 'sessions' && (
@@ -605,8 +666,13 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-full mx-auto px-6 md:px-12 py-12 relative z-10">
-        <AnimatePresence mode="wait">
+      <main
+        className="max-w-full mx-auto px-6 md:px-12 py-12 relative z-10 touch-pan-y"
+        onTouchStart={onSwipeStart}
+        onTouchMove={onSwipeMove}
+        onTouchEnd={onSwipeEnd}
+      >
+        <AnimatePresence mode="wait" onExitComplete={() => setIsTabSwitching(false)}>
           {activeTab === 'dashboard' && (
             <motion.div
               key="dashboard"
@@ -640,14 +706,14 @@ export default function App() {
               </div>
 
               <div className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl overflow-hidden">
-                <div className="px-8 py-6 border-b border-white/5 flex items-center justify-between bg-white/5">
+                <div className="px-4 md:px-8 py-6 border-b border-white/5 flex items-center justify-between bg-white/5">
                   <h2 className="font-black text-xl uppercase italic tracking-tighter">Leaderboard</h2>
                   <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
                     <TrendingUp size={12} className="text-emerald-500" />
                     Live Rankings
                   </div>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
                       <tr className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.2em]">
@@ -663,16 +729,11 @@ export default function App() {
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           transition={{ delay: idx * 0.05 }}
-                          onClick={() => setSelectedPlayer({ id: player.id, name: player.name })}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              setSelectedPlayer({ id: player.id, name: player.name });
-                            }
-                          }}
+                          onClick={() => handlePlayerClick(player)}
+                          onKeyDown={(e) => handlePlayerKey(e, player)}
                           role="button"
                           tabIndex={0}
-                          aria-label={`Show P/L history for ${player.name}`}
+                          aria-label={`View P/L history for ${player.name}`}
                           className="hover:bg-white/5 transition-colors group cursor-pointer focus:outline-none focus:bg-white/5"
                         >
                           <td className="px-8 py-6">
@@ -708,6 +769,46 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
+
+                <ul className="md:hidden divide-y divide-white/5">
+                  {players.map((player, idx) => (
+                    <motion.li
+                      key={player.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: idx * 0.05 }}
+                      onClick={() => handlePlayerClick(player)}
+                      onKeyDown={(e) => handlePlayerKey(e, player)}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`View P/L history for ${player.name}`}
+                      className="px-4 py-4 hover:bg-white/5 transition-colors cursor-pointer focus:outline-none focus:bg-white/5"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={cn(
+                          "w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-black shrink-0",
+                          idx === 0 ? "bg-yellow-500 text-black shadow-[0_0_15px_rgba(234,179,8,0.3)]" :
+                            idx === 1 ? "bg-zinc-300 text-black" :
+                              idx === 2 ? "bg-orange-600 text-white" :
+                                "bg-white/10 text-zinc-400"
+                        )}>
+                          {idx + 1}
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center font-black text-[11px] border border-white/10 shrink-0">
+                          {player.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="font-bold text-sm tracking-tight truncate min-w-0 flex-1">{player.name}</span>
+                      </div>
+                      <div className={cn(
+                        "mt-2 text-right font-mono text-2xl font-black tracking-tighter flex items-center justify-end gap-1.5",
+                        player.total_profit >= 0 ? "text-emerald-400" : "text-rose-500"
+                      )}>
+                        {player.total_profit >= 0 ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
+                        {player.total_profit >= 0 ? '+' : '-'}₹{Math.abs(player.total_profit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </div>
+                    </motion.li>
+                  ))}
+                </ul>
               </div>
             </motion.div>
           )}
@@ -767,7 +868,7 @@ export default function App() {
                     transition={{ delay: sIdx * 0.1 }}
                     className="bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl overflow-hidden group"
                   >
-                    <div className="px-8 py-5 border-b border-white/5 flex items-center bg-white/5">
+                    <div className="px-4 md:px-8 py-5 border-b border-white/5 flex items-center bg-white/5">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-white/5 flex flex-col items-center justify-center border border-white/10">
                           <span className="text-[10px] font-black text-zinc-500 uppercase">{monthName(session.date.split('-')[1])}</span>
@@ -809,7 +910,7 @@ export default function App() {
               className="space-y-8"
             >
               <div className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl overflow-hidden">
-                <div className="px-8 py-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                <div className="px-4 md:px-8 py-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
                   <div>
                     <h2 className="font-black text-xl uppercase italic tracking-tighter">Player Management</h2>
                     <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">Manage aliases to prevent duplicate players</p>
@@ -968,7 +1069,7 @@ export default function App() {
               className="space-y-8"
             >
               <div className="bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 shadow-2xl overflow-hidden relative z-20">
-                <div className="px-8 py-6 border-b border-white/5 bg-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-30">
+                <div className="px-4 md:px-8 py-6 border-b border-white/5 bg-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-30">
                   <div>
                     <h2 className="font-black text-xl uppercase italic tracking-tighter">Settlement Plan</h2>
                     <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1">Optimized Transaction Matrix</p>
@@ -1308,7 +1409,7 @@ export default function App() {
               </div>
 
               <div className="p-8 overflow-y-auto space-y-8">
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Session Date</label>
                     <input
