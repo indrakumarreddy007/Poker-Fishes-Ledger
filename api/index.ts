@@ -8,19 +8,29 @@ dotenv.config();
 const app = express();
 app.use(express.json({ limit: "20mb" }));
 
+// Treat loopback and common dev hosts as local (no SSL). Public hosts get SSL.
+const LOCAL_HOSTS = ["localhost", "127.0.0.1", "::1", "host.docker.internal"];
+const isLocalDb = LOCAL_HOSTS.some((h) => process.env.DATABASE_URL?.includes(h));
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("localhost")
-    ? false
-    : { rejectUnauthorized: false },
+  ssl: isLocalDb ? false : { rejectUnauthorized: false },
+});
+
+// Surface pool-level errors (e.g. idle client disconnects) without crashing the
+// process. Without this handler, emitted 'error' events on the Pool become
+// uncaught exceptions.
+pool.on("error", (err) => {
+  console.error("[db] pool error:", err.message);
 });
 
 // ---------------------------------------------------------------------------
 // Database initialisation — creates all tables on first run
 // ---------------------------------------------------------------------------
 const initDB = async () => {
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     // ── Fishes tables (existing) ────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS players (
@@ -107,13 +117,18 @@ const initDB = async () => {
       CREATE INDEX IF NOT EXISTS idx_live_sp_user         ON live_session_players(user_id);
     `);
   } catch (err) {
-    console.error("Error initialising database tables:", err);
+    // Keep the server process alive even when Postgres is unreachable at
+    // boot. Routes that need the DB will still fail with 500s, but at least
+    // the static SPA loads and the user sees a degraded UI instead of a
+    // blank page.
+    console.error("[db] initDB failed — server will stay up, API calls will fail until DB is reachable:", err instanceof Error ? err.message : err);
   } finally {
-    client.release();
+    if (client) client.release();
   }
 };
 
-initDB();
+// Don't await — initDB failures must not keep the HTTP server from binding.
+initDB().catch((err) => console.error("[db] initDB rejected:", err));
 
 // ===========================================================================
 // ── FISHES ROUTES (unchanged) ───────────────────────────────────────────────
