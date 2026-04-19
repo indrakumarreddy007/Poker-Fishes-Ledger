@@ -4,7 +4,7 @@ import {
   PublishSessionInput,
   PublishPlayerInput,
   PublishBuyInInput,
-} from './publishToLedger';
+} from '../../api/lib/publishToLedger';
 
 const session = (overrides: Partial<PublishSessionInput> = {}): PublishSessionInput => ({
   id: 'sess-1',

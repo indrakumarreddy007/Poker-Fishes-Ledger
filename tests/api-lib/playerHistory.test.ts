@@ -5,7 +5,7 @@ import {
   leaderboardTotal,
   SessionResultRow,
   SettlementRow,
-} from './playerHistory';
+} from '../../api/lib/playerHistory';
 
 const sr = (date: string, amount: number, note = ''): SessionResultRow => ({ date, amount, note });
 const settle = (
