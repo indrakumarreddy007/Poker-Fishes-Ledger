@@ -140,6 +140,13 @@ export default function App() {
   });
 
   const [selectedPlayer, setSelectedPlayer] = useState<{ id: number; name: string } | null>(null);
+  const handlePlayerClick = (player: Player) => setSelectedPlayer({ id: player.id, name: player.name });
+  const handlePlayerKey = (e: React.KeyboardEvent, player: Player) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handlePlayerClick(player);
+    }
+  };
 
   // --- Live Play state ---
   const [liveUser, setLiveUser] = useState<LiveUser | null>(null);
@@ -722,16 +729,11 @@ export default function App() {
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           transition={{ delay: idx * 0.05 }}
-                          onClick={() => setSelectedPlayer({ id: player.id, name: player.name })}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              setSelectedPlayer({ id: player.id, name: player.name });
-                            }
-                          }}
+                          onClick={() => handlePlayerClick(player)}
+                          onKeyDown={(e) => handlePlayerKey(e, player)}
                           role="button"
                           tabIndex={0}
-                          aria-label={`Show P/L history for ${player.name}`}
+                          aria-label={`View P/L history for ${player.name}`}
                           className="hover:bg-white/5 transition-colors group cursor-pointer focus:outline-none focus:bg-white/5"
                         >
                           <td className="px-8 py-6">
@@ -775,7 +777,12 @@ export default function App() {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ delay: idx * 0.05 }}
-                      className="px-4 py-4 hover:bg-white/5 transition-colors"
+                      onClick={() => handlePlayerClick(player)}
+                      onKeyDown={(e) => handlePlayerKey(e, player)}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`View P/L history for ${player.name}`}
+                      className="px-4 py-4 hover:bg-white/5 transition-colors cursor-pointer focus:outline-none focus:bg-white/5"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className={cn(
