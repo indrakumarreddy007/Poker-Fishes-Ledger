@@ -7,6 +7,12 @@ import {
   PublishBuyInInput,
   PublishPlayerInput,
 } from "../src/lib/publishToLedger";
+import {
+  buildCumulative,
+  buildPlayerHistoryEvents,
+  SessionResultRow,
+  SettlementRow,
+} from "../src/lib/playerHistory";
 
 dotenv.config();
 
@@ -193,12 +199,11 @@ app.get("/api/players", async (req, res) => {
   }
 });
 
-// Per-player event history for the Leaderboard popup. Signs match the
-// /api/players leaderboard formula above so cumulative[last].total equals
-// that player's total_profit. Payer settlements are +amount (paying off a
-// debt shrinks outstanding loss), payee settlements are -amount (receiving
-// cash realizes outstanding credit). Voided settlements filtered via
-// status='completed'.
+// Per-player event history for the Leaderboard popup. Raw session_results
+// and settlements rows are fetched here; sign flipping, "Settled with" /
+// "Received from" phrasing, sort order, and the running total all live in
+// src/lib/playerHistory.ts so a single unit-tested helper enforces the
+// invariant `cumulative[last].total === /api/players.total_profit`.
 app.get("/api/players/:id/history", async (req, res) => {
   const playerId = parseInt(req.params.id, 10);
   if (!Number.isFinite(playerId) || playerId <= 0) {
@@ -212,44 +217,43 @@ app.get("/api/players/:id/history", async (req, res) => {
     if (playerRes.rows.length === 0) {
       return res.status(404).json({ error: "Player not found" });
     }
-    const eventsRes = await pool.query(
-      `SELECT date, kind, delta, note FROM (
-         SELECT s.date AS date, 'session' AS kind,
-                sr.amount::numeric AS delta,
-                COALESCE(s.note, '') AS note
-           FROM session_results sr
-           JOIN sessions s ON sr.session_id = s.id
-          WHERE sr.player_id = $1
-         UNION ALL
-         SELECT st.date, 'settlement',
-                st.amount::numeric,
-                'Settled with ' || payee.name
-           FROM settlements st
-           JOIN players payee ON st.payee_id = payee.id
-          WHERE st.payer_id = $1 AND st.status = 'completed'
-         UNION ALL
-         SELECT st.date, 'settlement',
-                (-st.amount)::numeric,
-                'Received from ' || payer.name
-           FROM settlements st
-           JOIN players payer ON st.payer_id = payer.id
-          WHERE st.payee_id = $1 AND st.status = 'completed'
-       ) events
-       ORDER BY date ASC, kind ASC`,
+    const sessionRes = await pool.query(
+      `SELECT s.date, sr.amount::numeric AS amount, COALESCE(s.note, '') AS note
+         FROM session_results sr
+         JOIN sessions s ON sr.session_id = s.id
+        WHERE sr.player_id = $1`,
+      [playerId]
+    );
+    const settleRes = await pool.query(
+      `SELECT st.date, st.amount::numeric AS amount, st.status,
+              'payer' AS role, payee.name AS counterparty_name
+         FROM settlements st
+         JOIN players payee ON st.payee_id = payee.id
+        WHERE st.payer_id = $1
+       UNION ALL
+       SELECT st.date, st.amount::numeric AS amount, st.status,
+              'payee' AS role, payer.name AS counterparty_name
+         FROM settlements st
+         JOIN players payer ON st.payer_id = payer.id
+        WHERE st.payee_id = $1`,
       [playerId]
     );
 
-    const events = eventsRes.rows.map((r: any) => ({
-      date: r.date as string,
-      kind: r.kind as 'session' | 'settlement',
-      delta: parseFloat(r.delta),
-      note: r.note as string,
+    const sessions: SessionResultRow[] = sessionRes.rows.map((r: any) => ({
+      date: r.date,
+      amount: parseFloat(r.amount),
+      note: r.note,
     }));
-    let running = 0;
-    const cumulative = events.map((e) => {
-      running += e.delta;
-      return { date: e.date, total: Math.round(running * 100) / 100 };
-    });
+    const settlements: SettlementRow[] = settleRes.rows.map((r: any) => ({
+      date: r.date,
+      amount: parseFloat(r.amount),
+      status: r.status,
+      role: r.role,
+      counterpartyName: r.counterparty_name,
+    }));
+
+    const events = buildPlayerHistoryEvents(sessions, settlements);
+    const cumulative = buildCumulative(events);
 
     res.json({
       player: playerRes.rows[0],
