@@ -2,6 +2,11 @@ import express from "express";
 import { Pool } from "pg";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import {
+  buildFishesPayload,
+  PublishBuyInInput,
+  PublishPlayerInput,
+} from "../src/lib/publishToLedger";
 
 dotenv.config();
 
@@ -618,6 +623,116 @@ app.post("/api/live/sessions", async (req, res) => {
     await client.query("ROLLBACK");
     console.error(error);
     res.status(500).json({ error: "Failed to create live session" });
+  } finally {
+    client.release();
+  }
+});
+
+// Publish a closed live session to the Fishes ledger. One-shot: inserts
+// one Fishes `sessions` row plus one `session_results` row per player, then
+// flips `published_to_ledger`/`published_session_id` on the live session so
+// the button can't fire twice. All writes run inside a single transaction
+// so a failure mid-way rolls the Fishes insert back and leaves the live
+// session's published flag untouched.
+app.post("/api/live/sessions/:id/publish", async (req, res) => {
+  const { id } = req.params;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return res.status(400).json({ error: "Invalid session id" });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const sessRes = await client.query(
+      `SELECT id, name, status, closed_at, published_to_ledger, published_session_id
+       FROM live_sessions WHERE id = $1 FOR UPDATE`,
+      [id]
+    );
+    if (sessRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Session not found" });
+    }
+    const s = sessRes.rows[0];
+
+    const playersRes = await client.query(
+      `SELECT lsp.user_id, lu.name, lsp.final_winnings
+       FROM live_session_players lsp
+       JOIN live_users lu ON lsp.user_id = lu.id
+       WHERE lsp.session_id = $1`,
+      [id]
+    );
+    const players: PublishPlayerInput[] = playersRes.rows.map((r: any) => ({
+      userId: r.user_id,
+      name: r.name,
+      finalWinnings: r.final_winnings == null ? null : parseFloat(r.final_winnings),
+    }));
+
+    const buyInsRes = await client.query(
+      `SELECT user_id, amount, status FROM live_buy_ins WHERE session_id = $1`,
+      [id]
+    );
+    const buyIns: PublishBuyInInput[] = buyInsRes.rows.map((r: any) => ({
+      userId: r.user_id,
+      amount: parseFloat(r.amount),
+      status: r.status,
+    }));
+
+    const validation = buildFishesPayload(
+      {
+        id: s.id,
+        name: s.name,
+        status: s.status,
+        closedAt: s.closed_at,
+        publishedToLedger: s.published_to_ledger,
+        publishedSessionId: s.published_session_id,
+      },
+      players,
+      buyIns
+    );
+
+    if (!validation.ok) {
+      await client.query("ROLLBACK");
+      const err = validation.error;
+      if (err.code === "already_published") {
+        return res
+          .status(409)
+          .json({ alreadyPublished: true, fishesSessionId: err.fishesSessionId });
+      }
+      return res.status(422).json({ error: err.message });
+    }
+
+    const { date, note, results } = validation.payload;
+    const insertSession = await client.query(
+      "INSERT INTO sessions (date, note) VALUES ($1, $2) RETURNING id",
+      [date, note]
+    );
+    const fishesSessionId: number = insertSession.rows[0].id;
+
+    for (const r of results) {
+      const resolvedName = await resolvePlayerName(client, r.name);
+      const playerRes = await client.query(
+        "INSERT INTO players (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id",
+        [resolvedName]
+      );
+      await client.query(
+        "INSERT INTO session_results (session_id, player_id, amount) VALUES ($1, $2, $3)",
+        [fishesSessionId, playerRes.rows[0].id, r.amount]
+      );
+    }
+
+    await client.query(
+      `UPDATE live_sessions
+       SET published_to_ledger = TRUE, published_session_id = $1
+       WHERE id = $2`,
+      [fishesSessionId, id]
+    );
+
+    await client.query("COMMIT");
+    res.json({ fishesSessionId });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error(error);
+    res.status(500).json({ error: "Failed to publish session" });
   } finally {
     client.release();
   }
