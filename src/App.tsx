@@ -213,20 +213,32 @@ export default function App() {
   }, []);
 
   const fetchData = async () => {
-    try {
-      const [pRes, sRes, stRes, aRes] = await Promise.all([
-        fetch('/api/players'),
-        fetch('/api/sessions'),
-        fetch('/api/settlements'),
-        fetch('/api/players/aliases')
-      ]);
-      setPlayers(await pRes.json());
-      setSessions(await sRes.json());
-      setSettlements(await stRes.json());
-      setPlayersWithAliases(await aRes.json());
-    } catch (error) {
-      console.error("Failed to fetch data", error);
-    }
+    // Each endpoint is fetched independently so one failure doesn't wipe
+    // unrelated state. On !ok (e.g. DB down → 500) or a JSON parse failure,
+    // fall back to an empty array so downstream .filter/.map calls don't
+    // crash at render time.
+    const safeJson = async <T,>(url: string): Promise<T[]> => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return [];
+        const body = await res.json();
+        return Array.isArray(body) ? body : [];
+      } catch (err) {
+        console.error(`fetch ${url} failed:`, err);
+        return [];
+      }
+    };
+
+    const [p, s, st, a] = await Promise.all([
+      safeJson<Player>('/api/players'),
+      safeJson<Session>('/api/sessions'),
+      safeJson<Settlement>('/api/settlements'),
+      safeJson<PlayerWithAliases>('/api/players/aliases'),
+    ]);
+    setPlayers(p);
+    setSessions(s);
+    setSettlements(st);
+    setPlayersWithAliases(a);
   };
 
   const onDrop = async (acceptedFiles: File[]) => {
