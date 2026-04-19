@@ -127,6 +127,10 @@ const initDB = async () => {
         timestamp  TIMESTAMPTZ DEFAULT NOW()
       );
 
+      ALTER TABLE live_sessions
+        ADD COLUMN IF NOT EXISTS published_to_ledger  BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS published_session_id INTEGER REFERENCES sessions(id) ON DELETE SET NULL;
+
       CREATE INDEX IF NOT EXISTS idx_live_sessions_code   ON live_sessions(session_code);
       CREATE INDEX IF NOT EXISTS idx_live_buy_ins_session ON live_buy_ins(session_id);
       CREATE INDEX IF NOT EXISTS idx_live_sp_session      ON live_session_players(session_id);
