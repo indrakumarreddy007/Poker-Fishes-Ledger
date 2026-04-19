@@ -42,11 +42,19 @@ export interface LiveBuyIn {
   timestamp: number;
 }
 
+export interface LiveSessionPLPoint {
+  sessionId: string;
+  sessionName: string;
+  date: number;
+  pl: number;
+}
+
 export interface LivePlayerStats {
   weeklyPL: number;
   monthlyPL: number;
   yearlyPL: number;
   totalPL: number;
+  history?: LiveSessionPLPoint[];
 }
 
 export interface LiveSettlementTx {
@@ -247,7 +255,22 @@ export const liveApi = {
 
   getUserStats: async (userId: string): Promise<LivePlayerStats> => {
     const res = await fetch(`${BASE}/stats/${encodeURIComponent(userId)}`);
-    if (!res.ok) return { weeklyPL: 0, monthlyPL: 0, yearlyPL: 0, totalPL: 0 };
-    return res.json();
+    if (!res.ok) return { weeklyPL: 0, monthlyPL: 0, yearlyPL: 0, totalPL: 0, history: [] };
+    const data = await res.json();
+    const history: LiveSessionPLPoint[] = Array.isArray(data.history)
+      ? data.history.map((h: any) => ({
+          sessionId: h.sessionId,
+          sessionName: h.sessionName,
+          date: typeof h.date === 'number' ? h.date : new Date(h.date).getTime(),
+          pl: typeof h.pl === 'number' ? h.pl : parseFloat(h.pl),
+        }))
+      : [];
+    return {
+      weeklyPL: Number(data.weeklyPL) || 0,
+      monthlyPL: Number(data.monthlyPL) || 0,
+      yearlyPL: Number(data.yearlyPL) || 0,
+      totalPL: Number(data.totalPL) || 0,
+      history,
+    };
   },
 };

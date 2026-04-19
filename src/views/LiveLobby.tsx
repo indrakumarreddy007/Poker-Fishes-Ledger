@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { liveApi, LiveUser, LiveSession, LivePlayerStats } from '../services/liveApi';
+import { liveApi, LiveUser, LiveSession, LivePlayerStats, LiveSessionPLPoint } from '../services/liveApi';
+import { computeCumulative, computeScale, xFor as xForAt, yFor as yForAt } from '../lib/plChart';
 import {
   PlusCircle, Key, History, TrendingUp, LayoutDashboard,
-  ChevronRight, Activity, Zap, LogOut,
+  ChevronRight, Activity, Zap, LogOut, LineChart,
 } from 'lucide-react';
 
 interface LiveLobbyProps {
@@ -10,6 +11,66 @@ interface LiveLobbyProps {
   onLogout: () => void;
   navigate: (path: string) => void;
   initialCode?: string;
+}
+
+function PLChart({ points }: { points: LiveSessionPLPoint[] }) {
+  if (!points.length) {
+    return (
+      <div className="h-40 flex items-center justify-center text-slate-600 text-xs font-bold italic">
+        No closed sessions yet — your trend will show up once sessions settle.
+      </div>
+    );
+  }
+
+  const W = 320;
+  const H = 140;
+  const padX = 8;
+  const padY = 12;
+
+  const cumulative = computeCumulative(points);
+  const scale = computeScale(cumulative);
+  const xFor = (i: number) => xForAt(i, cumulative.length, W, padX);
+  const yFor = (v: number) => yForAt(v, scale, H, padY);
+  const zeroY = yFor(0);
+
+  const linePath = cumulative
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${xFor(i).toFixed(1)} ${yFor(p.cum).toFixed(1)}`)
+    .join(' ');
+  const areaPath =
+    cumulative.length > 1
+      ? `${linePath} L ${xFor(cumulative.length - 1).toFixed(1)} ${zeroY.toFixed(1)} L ${xFor(0).toFixed(1)} ${zeroY.toFixed(1)} Z`
+      : '';
+
+  const last = cumulative[cumulative.length - 1];
+  const lastColor = last.cum >= 0 ? '#34d399' : '#fb7185';
+
+  return (
+    <div className="w-full">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-40" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="plFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={lastColor} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={lastColor} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <line x1={padX} x2={W - padX} y1={zeroY} y2={zeroY} stroke="rgba(148,163,184,0.2)" strokeDasharray="3 3" />
+        {areaPath && <path d={areaPath} fill="url(#plFill)" />}
+        <path d={linePath} stroke={lastColor} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        {cumulative.map((p, i) => (
+          <circle key={p.sessionId} cx={xFor(i)} cy={yFor(p.cum)} r={2.5} fill={p.pl >= 0 ? '#34d399' : '#fb7185'}>
+            <title>{`${p.sessionName} • ${new Date(p.date).toLocaleDateString()}\nSession: ${p.pl >= 0 ? '+' : ''}₹${p.pl.toLocaleString()}\nCumulative: ${p.cum >= 0 ? '+' : ''}₹${p.cum.toLocaleString()}`}</title>
+          </circle>
+        ))}
+      </svg>
+      <div className="flex justify-between text-[9px] font-bold text-slate-500 uppercase tracking-widest px-1 pt-1">
+        <span>{new Date(cumulative[0].date).toLocaleDateString()}</span>
+        <span className={last.cum >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+          Net: {last.cum >= 0 ? '+' : ''}₹{last.cum.toLocaleString()}
+        </span>
+        <span>{new Date(last.date).toLocaleDateString()}</span>
+      </div>
+    </div>
+  );
 }
 
 export default function LiveLobby({ user, onLogout, navigate, initialCode }: LiveLobbyProps) {
@@ -23,7 +84,7 @@ export default function LiveLobby({ user, onLogout, navigate, initialCode }: Liv
   const [createError, setCreateError] = useState('');
   const [history, setHistory] = useState<LiveSession[]>([]);
   const [stats, setStats] = useState<LivePlayerStats>({
-    weeklyPL: 0, monthlyPL: 0, yearlyPL: 0, totalPL: 0,
+    weeklyPL: 0, monthlyPL: 0, yearlyPL: 0, totalPL: 0, history: [],
   });
 
   useEffect(() => {
@@ -115,6 +176,19 @@ export default function LiveLobby({ user, onLogout, navigate, initialCode }: Liv
           <StatCard title="Month"    val={stats.monthlyPL} color="border-sky-500" />
           <StatCard title="Year"     val={stats.yearlyPL}  color="border-amber-500" />
           <StatCard title="Lifetime" val={stats.totalPL}   color="border-purple-500" />
+        </div>
+
+        <div className="glass rounded-2xl p-4 mt-3">
+          <div className="flex items-center justify-between mb-3 px-1">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <LineChart className="w-3 h-3" /> P/L Trend
+            </h3>
+            <span className="text-[9px] font-bold text-slate-500 uppercase">
+              {(stats.history ?? []).length}{' '}
+              {(stats.history ?? []).length === 1 ? 'session' : 'sessions'}
+            </span>
+          </div>
+          <PLChart points={stats.history ?? []} />
         </div>
       </section>
 
