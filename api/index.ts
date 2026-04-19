@@ -797,7 +797,7 @@ app.patch("/api/live/buyin/:id", async (req, res) => {
 app.get("/api/live/stats/:userId", async (req, res) => {
   const { userId } = req.params;
   try {
-    const result = await pool.query(
+    const statsRes = await pool.query(
       `SELECT
         COALESCE(SUM(CASE WHEN ls.created_at >= NOW() - INTERVAL '7 days'
           THEN (COALESCE(lsp.final_winnings,0) - COALESCE(bi.total_buyin,0)) ELSE 0 END), 0) AS "weeklyPL",
@@ -816,7 +816,36 @@ app.get("/api/live/stats/:userId", async (req, res) => {
        WHERE lsp.user_id = $1 AND ls.status = 'closed'`,
       [userId]
     );
-    res.json(result.rows[0] || { weeklyPL: 0, monthlyPL: 0, yearlyPL: 0, totalPL: 0 });
+    const stats = statsRes.rows[0] || {
+      weeklyPL: 0, monthlyPL: 0, yearlyPL: 0, totalPL: 0,
+    };
+
+    const historyRes = await pool.query(
+      `SELECT
+         ls.id           AS session_id,
+         ls.name         AS session_name,
+         ls.created_at   AS session_date,
+         COALESCE(lsp.final_winnings, 0)     AS final_winnings,
+         COALESCE(bi.total_buyin, 0)         AS buyin_amount
+       FROM live_session_players lsp
+       JOIN live_sessions ls ON lsp.session_id = ls.id
+       LEFT JOIN (
+         SELECT session_id, user_id, SUM(amount) AS total_buyin
+         FROM live_buy_ins WHERE status = 'approved'
+         GROUP BY session_id, user_id
+       ) bi ON bi.session_id = lsp.session_id AND bi.user_id = lsp.user_id
+       WHERE lsp.user_id = $1 AND ls.status = 'closed'
+       ORDER BY ls.created_at ASC`,
+      [userId]
+    );
+    const history = historyRes.rows.map((r: any) => ({
+      sessionId: r.session_id,
+      sessionName: r.session_name,
+      date: new Date(r.session_date).getTime(),
+      pl: parseFloat(r.final_winnings) - parseFloat(r.buyin_amount),
+    }));
+
+    res.json({ ...stats, history });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to fetch stats" });
