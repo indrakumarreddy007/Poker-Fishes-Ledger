@@ -6,13 +6,13 @@ import {
   buildFishesPayload,
   PublishBuyInInput,
   PublishPlayerInput,
-} from "./lib/publishToLedger";
+} from "./lib/publishToLedger.js";
 import {
   buildCumulative,
   buildPlayerHistoryEvents,
   SessionResultRow,
   SettlementRow,
-} from "./lib/playerHistory";
+} from "./lib/playerHistory.js";
 
 dotenv.config();
 
