@@ -6,13 +6,13 @@ import {
   buildFishesPayload,
   PublishBuyInInput,
   PublishPlayerInput,
-} from "../src/lib/publishToLedger";
+} from "./lib/publishToLedger";
 import {
   buildCumulative,
   buildPlayerHistoryEvents,
   SessionResultRow,
   SettlementRow,
-} from "../src/lib/playerHistory";
+} from "./lib/playerHistory";
 
 dotenv.config();
 
@@ -202,7 +202,7 @@ app.get("/api/players", async (req, res) => {
 // Per-player event history for the Leaderboard popup. Raw session_results
 // and settlements rows are fetched here; sign flipping, "Settled with" /
 // "Received from" phrasing, sort order, and the running total all live in
-// src/lib/playerHistory.ts so a single unit-tested helper enforces the
+// api/lib/playerHistory.ts so a single unit-tested helper enforces the
 // invariant `cumulative[last].total === /api/players.total_profit`.
 app.get("/api/players/:id/history", async (req, res) => {
   const playerId = parseInt(req.params.id, 10);
