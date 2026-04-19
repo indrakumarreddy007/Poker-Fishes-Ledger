@@ -8,19 +8,45 @@ dotenv.config();
 const app = express();
 app.use(express.json({ limit: "20mb" }));
 
+// Treat loopback and common dev hosts as local (no SSL). Public hosts get SSL.
+const LOCAL_HOSTS = ["localhost", "127.0.0.1", "::1", "host.docker.internal"];
+const isLocalDb = LOCAL_HOSTS.some((h) => process.env.DATABASE_URL?.includes(h));
+
+// Extract host:port for boot-time logging without leaking credentials.
+// Matches the host/port segment of a postgres URL, tolerates missing port.
+function dbTargetForLog(url: string | undefined): string {
+  if (!url) return "<unset>";
+  const m = url.match(/@([^/?#]+)/);
+  return m ? m[1] : "<unparseable>";
+}
+
+console.log(`[db] target: ${dbTargetForLog(process.env.DATABASE_URL)} (ssl: ${isLocalDb ? "off" : "on"})`);
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("localhost")
-    ? false
-    : { rejectUnauthorized: false },
+  ssl: isLocalDb ? false : { rejectUnauthorized: false },
+});
+
+// Track whether initDB ever succeeded. Used by the /api/live middleware to
+// short-circuit requests with 503 when the DB is known-unhealthy, rather than
+// letting them hit the pool and bubble 500s.
+let dbReady = false;
+
+// Surface pool-level errors (e.g. idle client disconnects) without crashing the
+// process. Without this handler, emitted 'error' events on the Pool become
+// uncaught exceptions.
+pool.on("error", (err) => {
+  console.error("[db] pool error:", err.message);
+  dbReady = false;
 });
 
 // ---------------------------------------------------------------------------
 // Database initialisation — creates all tables on first run
 // ---------------------------------------------------------------------------
 const initDB = async () => {
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     // ── Fishes tables (existing) ────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS players (
@@ -106,14 +132,21 @@ const initDB = async () => {
       CREATE INDEX IF NOT EXISTS idx_live_sp_session      ON live_session_players(session_id);
       CREATE INDEX IF NOT EXISTS idx_live_sp_user         ON live_session_players(user_id);
     `);
+    dbReady = true;
+    console.log("[db] initDB ok — schema verified");
   } catch (err) {
-    console.error("Error initialising database tables:", err);
+    // Keep the server process alive even when Postgres is unreachable at
+    // boot. Routes that need the DB will still fail with 503s, but at least
+    // the static SPA loads and the user sees a degraded UI instead of a
+    // blank page.
+    console.error("[db] initDB failed — server will stay up, API calls will fail until DB is reachable:", err instanceof Error ? err.message : err);
   } finally {
-    client.release();
+    if (client) client.release();
   }
 };
 
-initDB();
+// Don't await — initDB failures must not keep the HTTP server from binding.
+initDB().catch((err) => console.error("[db] initDB rejected:", err));
 
 // ===========================================================================
 // ── FISHES ROUTES (unchanged) ───────────────────────────────────────────────
@@ -468,6 +501,16 @@ Return a JSON array of objects with 'name' (string) and 'amount' (number, positi
 // ── LIVE (THOR) ROUTES — all under /api/live/ ───────────────────────────────
 // ===========================================================================
 
+// Short-circuit Live routes with 503 when the DB never initialised or has
+// dropped. 503 (not 500) is the honest code for "backend dep dead" and lets
+// the frontend distinguish a backend outage from a real bug.
+app.use("/api/live", (_req, res, next) => {
+  if (!dbReady) {
+    return res.status(503).json({ error: "database unavailable" });
+  }
+  next();
+});
+
 // Helper: generate random 6-char alphanumeric session code
 function generateCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -754,7 +797,7 @@ app.patch("/api/live/buyin/:id", async (req, res) => {
 app.get("/api/live/stats/:userId", async (req, res) => {
   const { userId } = req.params;
   try {
-    const result = await pool.query(
+    const statsRes = await pool.query(
       `SELECT
         COALESCE(SUM(CASE WHEN ls.created_at >= NOW() - INTERVAL '7 days'
           THEN (COALESCE(lsp.final_winnings,0) - COALESCE(bi.total_buyin,0)) ELSE 0 END), 0) AS "weeklyPL",
@@ -773,7 +816,36 @@ app.get("/api/live/stats/:userId", async (req, res) => {
        WHERE lsp.user_id = $1 AND ls.status = 'closed'`,
       [userId]
     );
-    res.json(result.rows[0] || { weeklyPL: 0, monthlyPL: 0, yearlyPL: 0, totalPL: 0 });
+    const stats = statsRes.rows[0] || {
+      weeklyPL: 0, monthlyPL: 0, yearlyPL: 0, totalPL: 0,
+    };
+
+    const historyRes = await pool.query(
+      `SELECT
+         ls.id           AS session_id,
+         ls.name         AS session_name,
+         ls.created_at   AS session_date,
+         COALESCE(lsp.final_winnings, 0)     AS final_winnings,
+         COALESCE(bi.total_buyin, 0)         AS buyin_amount
+       FROM live_session_players lsp
+       JOIN live_sessions ls ON lsp.session_id = ls.id
+       LEFT JOIN (
+         SELECT session_id, user_id, SUM(amount) AS total_buyin
+         FROM live_buy_ins WHERE status = 'approved'
+         GROUP BY session_id, user_id
+       ) bi ON bi.session_id = lsp.session_id AND bi.user_id = lsp.user_id
+       WHERE lsp.user_id = $1 AND ls.status = 'closed'
+       ORDER BY ls.created_at ASC`,
+      [userId]
+    );
+    const history = historyRes.rows.map((r: any) => ({
+      sessionId: r.session_id,
+      sessionName: r.session_name,
+      date: new Date(r.session_date).getTime(),
+      pl: parseFloat(r.final_winnings) - parseFloat(r.buyin_amount),
+    }));
+
+    res.json({ ...stats, history });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to fetch stats" });
