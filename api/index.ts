@@ -193,6 +193,75 @@ app.get("/api/players", async (req, res) => {
   }
 });
 
+// Per-player event history for the Leaderboard popup. Signs match the
+// /api/players leaderboard formula above so cumulative[last].total equals
+// that player's total_profit. Payer settlements are +amount (paying off a
+// debt shrinks outstanding loss), payee settlements are -amount (receiving
+// cash realizes outstanding credit). Voided settlements filtered via
+// status='completed'.
+app.get("/api/players/:id/history", async (req, res) => {
+  const playerId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(playerId) || playerId <= 0) {
+    return res.status(400).json({ error: "Invalid player id" });
+  }
+  try {
+    const playerRes = await pool.query(
+      "SELECT id, name FROM players WHERE id = $1",
+      [playerId]
+    );
+    if (playerRes.rows.length === 0) {
+      return res.status(404).json({ error: "Player not found" });
+    }
+    const eventsRes = await pool.query(
+      `SELECT date, kind, delta, note FROM (
+         SELECT s.date AS date, 'session' AS kind,
+                sr.amount::numeric AS delta,
+                COALESCE(s.note, '') AS note
+           FROM session_results sr
+           JOIN sessions s ON sr.session_id = s.id
+          WHERE sr.player_id = $1
+         UNION ALL
+         SELECT st.date, 'settlement',
+                st.amount::numeric,
+                'Settled with ' || payee.name
+           FROM settlements st
+           JOIN players payee ON st.payee_id = payee.id
+          WHERE st.payer_id = $1 AND st.status = 'completed'
+         UNION ALL
+         SELECT st.date, 'settlement',
+                (-st.amount)::numeric,
+                'Received from ' || payer.name
+           FROM settlements st
+           JOIN players payer ON st.payer_id = payer.id
+          WHERE st.payee_id = $1 AND st.status = 'completed'
+       ) events
+       ORDER BY date ASC, kind ASC`,
+      [playerId]
+    );
+
+    const events = eventsRes.rows.map((r: any) => ({
+      date: r.date as string,
+      kind: r.kind as 'session' | 'settlement',
+      delta: parseFloat(r.delta),
+      note: r.note as string,
+    }));
+    let running = 0;
+    const cumulative = events.map((e) => {
+      running += e.delta;
+      return { date: e.date, total: Math.round(running * 100) / 100 };
+    });
+
+    res.json({
+      player: playerRes.rows[0],
+      events,
+      cumulative,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to fetch player history" });
+  }
+});
+
 app.get("/api/sessions", async (req, res) => {
   try {
     const { rows } = await pool.query(`
