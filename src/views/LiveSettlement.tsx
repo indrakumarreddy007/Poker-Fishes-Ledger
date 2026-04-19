@@ -156,13 +156,20 @@ export default function LiveSettlement({ user, sessionId, navigate }: Props) {
       {data.session.createdBy === user.id && (
         <section className="flex flex-col items-center gap-2 pt-2">
           {publishState === 'done' ? (
-            <button
-              type="button"
-              disabled
-              className="px-8 py-4 bg-slate-800 border border-slate-700 rounded-2xl font-bold text-slate-400 cursor-not-allowed flex items-center gap-2"
-            >
-              <Check className="w-4 h-4" /> Already Published
-            </button>
+            <>
+              <button
+                type="button"
+                disabled
+                className="px-8 py-4 bg-slate-800 border border-slate-700 rounded-2xl font-bold text-slate-400 cursor-not-allowed flex items-center gap-2"
+              >
+                <Check className="w-4 h-4" /> Already Published
+              </button>
+              {data.session.publishedSessionId != null && (
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  Fishes session #{data.session.publishedSessionId}
+                </p>
+              )}
+            </>
           ) : (
             <button
               type="button"
