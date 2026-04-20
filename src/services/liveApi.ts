@@ -105,6 +105,53 @@ const mapBuyIn = (b: any): LiveBuyIn => ({
   timestamp: new Date(b.timestamp).getTime(),
 });
 
+// ── Tenant-header helpers ────────────────────────────────────────────────────
+//
+// Every request made by this client must carry X-Tenant-Code. The header
+// is sourced from localStorage ('tenantCode'), which Engineer C's landing
+// page writes after the user picks a group. If the server rejects the code
+// as missing or invalid we clear the stored code and reload — reload is
+// the minimum we can do without knowing the React router; the landing
+// page will then take over.
+//
+// In non-browser contexts (SSR, unit tests) localStorage is undefined;
+// the helpers return an empty string which means the server will reject
+// with missing_tenant_code and the caller gets a clean error.
+
+function getTenantCode(): string {
+  if (typeof localStorage === 'undefined') return '';
+  return localStorage.getItem('tenantCode') || '';
+}
+
+function tenantHeaders(extra?: Record<string, string>): Record<string, string> {
+  const code = getTenantCode();
+  const headers: Record<string, string> = { ...(extra || {}) };
+  if (code) headers['X-Tenant-Code'] = code;
+  return headers;
+}
+
+function clearTenantAndReload(): void {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem('tenantCode');
+  }
+  if (typeof window !== 'undefined') {
+    window.location.reload();
+  }
+}
+
+// Centralised tenant-error handling. A 401 with missing_tenant_code or
+// invalid_tenant_code means the cached code in localStorage is gone or
+// wrong — wipe it and reload so the landing page runs the flow again.
+function maybeHandleTenantError(status: number, body: any): boolean {
+  if (status !== 401) return false;
+  const err = body?.error;
+  if (err === 'missing_tenant_code' || err === 'invalid_tenant_code') {
+    clearTenantAndReload();
+    return true;
+  }
+  return false;
+}
+
 // ── Generic fetch helper ─────────────────────────────────────────────────────
 
 async function apiFetch<T>(
@@ -112,11 +159,21 @@ async function apiFetch<T>(
   options?: RequestInit
 ): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
   try {
-    const res = await fetch(url, options);
+    // Merge X-Tenant-Code into whatever headers the caller passed. We do
+    // this inside apiFetch (rather than expecting each call site to add
+    // it) so adding the tenant to the protocol stays a single-line change
+    // even as the number of endpoints grows.
+    const mergedHeaders = tenantHeaders(
+      (options?.headers as Record<string, string>) || undefined
+    );
+    const res = await fetch(url, { ...options, headers: mergedHeaders });
     const contentType = res.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
       const data = await res.json();
-      if (!res.ok) return { ok: false, error: data.error || `Error ${res.status}` };
+      if (!res.ok) {
+        maybeHandleTenantError(res.status, data);
+        return { ok: false, error: data.error || `Error ${res.status}` };
+      }
       return { ok: true, data };
     }
     const text = await res.text();
@@ -124,6 +181,27 @@ async function apiFetch<T>(
   } catch (e: any) {
     return { ok: false, error: `Network error: ${e.message}` };
   }
+}
+
+// Thin wrapper for the handful of call sites that still use raw fetch
+// (they want Response, not the apiFetch envelope). Centralises header
+// injection and tenant-error handling in one place.
+async function tenantFetch(url: string, options?: RequestInit): Promise<Response> {
+  const mergedHeaders = tenantHeaders(
+    (options?.headers as Record<string, string>) || undefined
+  );
+  const res = await fetch(url, { ...options, headers: mergedHeaders });
+  if (res.status === 401) {
+    // Peek at the body without consuming it for downstream callers. We
+    // clone so the original response is still readable.
+    try {
+      const peek = await res.clone().json();
+      maybeHandleTenantError(res.status, peek);
+    } catch {
+      // Non-JSON 401 — leave it alone; probably not from our middleware.
+    }
+  }
+  return res;
 }
 
 // ── API object ───────────────────────────────────────────────────────────────
@@ -159,7 +237,7 @@ export const liveApi = {
 
   // Sessions
   getSessions: async (userId: string): Promise<LiveSession[]> => {
-    const res = await fetch(`${BASE}/sessions?userId=${encodeURIComponent(userId)}`);
+    const res = await tenantFetch(`${BASE}/sessions?userId=${encodeURIComponent(userId)}`);
     if (!res.ok) return [];
     const data = await res.json();
     return data.map(mapSession);
@@ -182,7 +260,7 @@ export const liveApi = {
   getSession: async (
     idOrCode: string
   ): Promise<{ session: LiveSession; players: LiveSessionPlayer[]; buyIns: LiveBuyIn[] } | null> => {
-    const res = await fetch(`${BASE}/session/${encodeURIComponent(idOrCode)}`);
+    const res = await tenantFetch(`${BASE}/session/${encodeURIComponent(idOrCode)}`);
     if (!res.ok) return null;
     const data = await res.json();
     return {
@@ -225,7 +303,7 @@ export const liveApi = {
     buyInId: string,
     status: 'pending' | 'approved' | 'rejected'
   ): Promise<boolean> => {
-    const res = await fetch(`${BASE}/buyin/${buyInId}`, {
+    const res = await tenantFetch(`${BASE}/buyin/${buyInId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
@@ -237,7 +315,7 @@ export const liveApi = {
     sessionId: string,
     status: 'active' | 'closed'
   ): Promise<boolean> => {
-    const res = await fetch(`${BASE}/session/status`, {
+    const res = await tenantFetch(`${BASE}/session/status`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId, status }),
@@ -250,7 +328,7 @@ export const liveApi = {
     userId: string,
     winnings: number
   ): Promise<boolean> => {
-    const res = await fetch(`${BASE}/session/settle`, {
+    const res = await tenantFetch(`${BASE}/session/settle`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId, userId, winnings }),
@@ -264,7 +342,7 @@ export const liveApi = {
     | { success: true; fishesSessionId: number; alreadyPublished?: boolean }
     | { success: false; error: string }
   > => {
-    const res = await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/publish`, {
+    const res = await tenantFetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/publish`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -284,7 +362,7 @@ export const liveApi = {
   },
 
   getUserStats: async (userId: string): Promise<LivePlayerStats> => {
-    const res = await fetch(`${BASE}/stats/${encodeURIComponent(userId)}`);
+    const res = await tenantFetch(`${BASE}/stats/${encodeURIComponent(userId)}`);
     if (!res.ok) return { weeklyPL: 0, monthlyPL: 0, yearlyPL: 0, totalPL: 0, history: [] };
     const data = await res.json();
     const history: LiveSessionPLPoint[] = Array.isArray(data.history)
