@@ -647,12 +647,13 @@ app.get("/api/live/sessions", async (req, res) => {
   try {
     let rows;
     if (userId) {
-      // Return sessions the user participates in
+      // Return sessions the user participates in, plus every active table
+      // so the lobby shows joinable games without requiring the 6-char code.
       const result = await pool.query(
         `SELECT DISTINCT ls.*
          FROM live_sessions ls
          LEFT JOIN live_session_players lsp ON ls.id = lsp.session_id
-         WHERE lsp.user_id = $1 OR ls.created_by = $1
+         WHERE lsp.user_id = $1 OR ls.created_by = $1 OR ls.status = 'active'
          ORDER BY ls.created_at DESC`,
         [userId]
       );
