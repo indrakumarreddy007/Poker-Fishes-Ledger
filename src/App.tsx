@@ -40,8 +40,10 @@ import LiveLobby from './views/LiveLobby';
 import LiveSessionAdmin from './views/LiveSessionAdmin';
 import LiveSessionPlayer from './views/LiveSessionPlayer';
 import LiveSettlement from './views/LiveSettlement';
+import GroupLanding from './views/GroupLanding';
 import PlayerHistoryModal from './components/PlayerHistoryModal';
 import type { LiveUser } from './services/liveApi';
+import { getTenantCode, clearTenantCode } from './lib/tenantCode';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -113,6 +115,22 @@ const TAB_ORDER: TabId[] = ['dashboard', 'sessions', 'livePlay', 'players', 'deb
 const SWIPE_THRESHOLD = 60;
 
 export default function App() {
+  // --- Tenant gate ---------------------------------------------------------
+  // The app is multi-tenant (Phase 3). Every browser session must be bound
+  // to a group code before any API call is made. If the user hasn't picked
+  // a group yet, we return <GroupLanding /> below, BEFORE running any other
+  // hooks -- so the gate is placed right after the initial state read. A
+  // full reload is used by the Switch-group handler to avoid hook-order
+  // asymmetry between the gated and ungated renders.
+  if (typeof window !== 'undefined' && !getTenantCode()) {
+    return <GroupLanding />;
+  }
+
+  const handleSwitchGroup = () => {
+    clearTenantCode();
+    if (typeof window !== 'undefined') window.location.reload();
+  };
+
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [players, setPlayers] = useState<Player[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -595,13 +613,34 @@ export default function App() {
             </div>
           </div>
 
-          <button
-            onClick={() => exportLedgerToPdf(sessions, players)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white text-black rounded-full text-xs font-black uppercase tracking-widest hover:bg-zinc-200 transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-95"
-          >
-            <Download size={14} />
-            Export PDF
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSwitchGroup}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-white rounded-full hover:bg-white/5 transition-all"
+              title="Sign out of this group"
+            >
+              <DoorOpen size={13} />
+              Switch Group
+            </button>
+            <button
+              type="button"
+              onClick={handleSwitchGroup}
+              aria-label="Switch group"
+              title="Switch group"
+              className="sm:hidden inline-flex items-center justify-center w-9 h-9 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
+            >
+              <DoorOpen size={16} />
+            </button>
+            <button
+              onClick={() => exportLedgerToPdf(sessions, players)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-white text-black rounded-full text-xs font-black uppercase tracking-widest hover:bg-zinc-200 transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-95"
+            >
+              <Download size={14} />
+              <span className="hidden sm:inline">Export PDF</span>
+              <span className="sm:hidden">PDF</span>
+            </button>
+          </div>
         </div>
 
         <div className="max-w-full mx-auto px-2 md:px-12 flex items-center overflow-x-auto scrollbar-hide">
