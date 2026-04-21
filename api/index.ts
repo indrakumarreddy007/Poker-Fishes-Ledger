@@ -860,7 +860,7 @@ app.post("/api/live/session/buyin", async (req, res) => {
     await client.query("BEGIN");
     // Auto-enroll as player if not already in session
     const existing = await client.query(
-      "SELECT id FROM live_session_players WHERE session_id = $1 AND user_id = $2",
+      "SELECT 1 AS existing FROM live_session_players WHERE session_id = $1 AND user_id = $2",
       [sessionId, userId]
     );
     if (existing.rows.length === 0) {
