@@ -3,6 +3,7 @@ import {
   liveApi, LiveUser, LiveSession, LiveSessionPlayer as LiveSessionPlayerType, LiveBuyIn,
 } from '../services/liveApi';
 import { aggregateTableBuyIns, tablePot as computeTablePot, potShare } from '../lib/buyIns';
+import BuyInEmojiBurst from '../components/BuyInEmojiBurst';
 import {
   Clock, Wallet, CheckCircle, AlertCircle, Plus, Zap, History, DollarSign, ShieldCheck, Users,
 } from 'lucide-react';
@@ -20,6 +21,10 @@ export default function LiveSessionPlayer({ user, sessionCode, navigate }: Props
   const [allBuyIns, setAllBuyIns] = useState<LiveBuyIn[]>([]);
   const [amount, setAmount]     = useState('');
   const [isRequesting, setIsRequesting] = useState(false);
+  // Emoji burst fires on the transition from "player had no buy-ins" to
+  // "player just submitted one". `burst` is null when idle; when set, the
+  // overlay component renders then calls onDone to clear it.
+  const [burst, setBurst] = useState<{ amount: number; isFirst: boolean } | null>(null);
 
   const refreshData = async () => {
     const data = await liveApi.getSession(sessionCode);
@@ -54,9 +59,14 @@ export default function LiveSessionPlayer({ user, sessionCode, navigate }: Props
   const handleRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session || !amount || parseFloat(amount) <= 0) return;
-    await liveApi.requestBuyIn(session.id, user.id, parseFloat(amount));
+    // Snapshot "is this the first one?" BEFORE the request — refreshData()
+    // below will flip buyIns.length from 0 to 1 if it goes through.
+    const isFirst = buyIns.length === 0;
+    const parsed = parseFloat(amount);
+    const res = await liveApi.requestBuyIn(session.id, user.id, parsed);
     setAmount('');
     setIsRequesting(false);
+    if (res.success) setBurst({ amount: parsed, isFirst });
     refreshData();
   };
 
@@ -75,6 +85,13 @@ export default function LiveSessionPlayer({ user, sessionCode, navigate }: Props
 
   return (
     <div className="space-y-6 pb-12">
+      {burst && (
+        <BuyInEmojiBurst
+          amount={burst.amount}
+          isFirst={burst.isFirst}
+          onDone={() => setBurst(null)}
+        />
+      )}
       <div className="text-center space-y-4">
         <h1 className="text-5xl font-black tracking-tighter text-white drop-shadow-2xl">
           {session.name}

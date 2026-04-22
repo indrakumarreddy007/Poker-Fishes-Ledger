@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   liveApi, LiveUser, LiveSession, LiveSessionPlayer, LiveBuyIn,
 } from '../services/liveApi';
+import BuyInEmojiBurst from '../components/BuyInEmojiBurst';
 import {
   Check, X, Users, Trophy, Plus, DollarSign, AlertTriangle,
   History, ChevronDown, ChevronUp, Clock, ShieldCheck,
@@ -24,6 +25,7 @@ export default function LiveSessionAdmin({ user, sessionCode, navigate }: Props)
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
   const [error, setError]       = useState('');
   const [fetchError, setFetchError] = useState('');
+  const [burst, setBurst] = useState<{ amount: number; isFirst: boolean } | null>(null);
 
   const refreshData = async () => {
     const data = await liveApi.getSession(sessionCode);
@@ -64,9 +66,14 @@ export default function LiveSessionAdmin({ user, sessionCode, navigate }: Props)
   const handleAdminBuyIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session || !ownAmount) return;
-    await liveApi.requestBuyIn(session.id, user.id, parseFloat(ownAmount), 'approved');
+    const parsed = parseFloat(ownAmount);
+    // First buy-in = admin has no buy-in rows yet at this table. Admin buy-ins
+    // auto-approve so we don't filter by status.
+    const isFirst = buyIns.filter((b) => b.userId === user.id).length === 0;
+    const res = await liveApi.requestBuyIn(session.id, user.id, parsed, 'approved');
     setOwnAmount('');
     setIsAddingOwn(false);
+    if (res.success) setBurst({ amount: parsed, isFirst });
     refreshData();
   };
 
@@ -122,6 +129,13 @@ export default function LiveSessionAdmin({ user, sessionCode, navigate }: Props)
 
   return (
     <div className="space-y-6 pb-12">
+      {burst && (
+        <BuyInEmojiBurst
+          amount={burst.amount}
+          isFirst={burst.isFirst}
+          onDone={() => setBurst(null)}
+        />
+      )}
       {/* Header */}
       <div className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-2xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">

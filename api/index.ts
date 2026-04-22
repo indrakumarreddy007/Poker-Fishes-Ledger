@@ -38,23 +38,34 @@ const pool = new Pool({
   ssl: isLocalDb ? false : { rejectUnauthorized: false },
 });
 
-// Track whether initDB ever succeeded. Used by the /api/live middleware to
-// short-circuit requests with 503 when the DB is known-unhealthy, rather than
-// letting them hit the pool and bubble 500s.
-let dbReady = false;
-
-// Surface pool-level errors (e.g. idle client disconnects) without crashing the
-// process. Without this handler, emitted 'error' events on the Pool become
-// uncaught exceptions.
+// Serverless idle-suspend (Neon) routinely drops idle clients and emits a pool
+// 'error'. Without a listener the event becomes an uncaught exception. Log
+// only — pg will establish a fresh connection on the next query, so we do NOT
+// latch any "dbReady=false" flag here (doing so permanently 503'd every
+// subsequent request on the same lambda instance).
 pool.on("error", (err) => {
-  console.error("[db] pool error:", err.message);
-  dbReady = false;
+  console.error("[db] pool error (ignored, pg will reconnect):", err.message);
 });
 
 // ---------------------------------------------------------------------------
-// Database initialisation — creates all tables on first run
+// Database initialisation — creates all tables on first run.
+// Cached as a single promise: first request on a cold lambda awaits it; every
+// later request hits the cached resolved promise and is a no-op. On failure
+// the cache is cleared so the NEXT request retries init rather than the
+// instance being permanently broken.
 // ---------------------------------------------------------------------------
-const initDB = async () => {
+let initPromise: Promise<void> | null = null;
+
+function ensureInitialized(): Promise<void> {
+  if (initPromise) return initPromise;
+  initPromise = runInitDB().catch((err) => {
+    initPromise = null;
+    throw err;
+  });
+  return initPromise;
+}
+
+const runInitDB = async () => {
   let client;
   try {
     client = await pool.connect();
@@ -147,21 +158,18 @@ const initDB = async () => {
       CREATE INDEX IF NOT EXISTS idx_live_sp_session      ON live_session_players(session_id);
       CREATE INDEX IF NOT EXISTS idx_live_sp_user         ON live_session_players(user_id);
     `);
-    dbReady = true;
     console.log("[db] initDB ok — schema verified");
-  } catch (err) {
-    // Keep the server process alive even when Postgres is unreachable at
-    // boot. Routes that need the DB will still fail with 503s, but at least
-    // the static SPA loads and the user sees a degraded UI instead of a
-    // blank page.
-    console.error("[db] initDB failed — server will stay up, API calls will fail until DB is reachable:", err instanceof Error ? err.message : err);
   } finally {
     if (client) client.release();
   }
 };
 
-// Don't await — initDB failures must not keep the HTTP server from binding.
-initDB().catch((err) => console.error("[db] initDB rejected:", err));
+// Kick off init on module load so a warm lambda already has the schema
+// verified. Failure is swallowed — ensureInitialized() will retry on the next
+// request that actually needs the DB.
+ensureInitialized().catch((err) =>
+  console.error("[db] initial ensureInitialized failed (will retry on first request):", err instanceof Error ? err.message : err)
+);
 
 // ===========================================================================
 // ── FISHES ROUTES (unchanged) ───────────────────────────────────────────────
@@ -583,14 +591,19 @@ Return a JSON array of objects with 'name' (string) and 'amount' (number, positi
 // ── LIVE (THOR) ROUTES — all under /api/live/ ───────────────────────────────
 // ===========================================================================
 
-// Short-circuit Live routes with 503 when the DB never initialised or has
-// dropped. 503 (not 500) is the honest code for "backend dep dead" and lets
-// the frontend distinguish a backend outage from a real bug.
-app.use("/api/live", (_req, res, next) => {
-  if (!dbReady) {
-    return res.status(503).json({ error: "database unavailable" });
+// Await schema init before serving any live route. On a warm lambda this
+// resolves synchronously (cached Promise). On a cold lambda the first request
+// waits (~tens of ms). If init genuinely fails we return 503 once and clear
+// the cache so the NEXT request retries — no more "latched dead" state where
+// a single transient pool error bricks the instance for every later user.
+app.use("/api/live", async (_req, res, next) => {
+  try {
+    await ensureInitialized();
+    next();
+  } catch (err) {
+    console.error("[db] ensureInitialized rejected for /api/live:", err instanceof Error ? err.message : err);
+    res.status(503).json({ error: "Database temporarily unavailable, please retry." });
   }
-  next();
 });
 
 // Helper: generate random 6-char alphanumeric session code
