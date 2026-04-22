@@ -71,11 +71,11 @@ export default function PlayerHistoryModal({ playerId, playerName, onClose }: Pr
     };
   }, [onClose]);
 
-  // Chart + headline number track SESSION P/L only. Settlements are cash
-  // movements between players; they change Net Balance (what the /api/players
-  // leaderboard shows) but not Net P/L at the table. Keeping them in the event
-  // list below (so the user can still see when a debt was cleared) but off the
-  // chart so the number next to "Net P/L Over Time" actually means that.
+  // The modal shows session P/L only — chart, tiles, and the list below.
+  // Settlements are cash movements between players; they change Net Balance
+  // (what /api/players.total_profit shows) but not Net P/L at the table.
+  // The endpoint still returns both kinds so other callers can recover the
+  // Net-Balance series; we just filter them out here.
   const sessionEvents = (data?.events ?? []).filter((e) => e.kind === 'session');
   const sessionCumulative: CumulativePoint[] = [];
   {
@@ -115,13 +115,11 @@ export default function PlayerHistoryModal({ playerId, playerName, onClose }: Pr
     if (e.delta < highestLoss) highestLoss = e.delta;
   }
 
-  // Event list renders newest-first. Tie-break: settlement before session on
-  // the same date (reverse of the server's asc ordering).
-  const orderedEvents = [...(data?.events ?? [])].sort((a, b) => {
-    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-    return a.kind < b.kind ? 1 : a.kind > b.kind ? -1 : 0;
-  });
-  const hasAnyEvents = (data?.events.length ?? 0) > 0;
+  // Session list, newest-first.
+  const orderedEvents = [...sessionEvents].sort((a, b) =>
+    a.date !== b.date ? (a.date < b.date ? 1 : -1) : 0
+  );
+  const hasAnyEvents = sessionEvents.length > 0;
 
   return (
     <div
@@ -232,7 +230,7 @@ export default function PlayerHistoryModal({ playerId, playerName, onClose }: Pr
                 >
                   <div className="flex flex-col min-w-0">
                     <span className="text-xs font-bold text-zinc-300 truncate">{e.note || '—'}</span>
-                    <span className="text-[10px] text-zinc-600 font-mono">{e.date} · {e.kind}</span>
+                    <span className="text-[10px] text-zinc-600 font-mono">{e.date}</span>
                   </div>
                   <span
                     className={`text-sm font-black font-mono tabular-nums shrink-0 ${e.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
