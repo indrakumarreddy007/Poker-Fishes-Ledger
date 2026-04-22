@@ -22,6 +22,20 @@ describe('computeCumulative', () => {
     const cum = computeCumulative([pt('a', 50), pt('b', -10)]);
     expect(cum[1]).toMatchObject({ sessionId: 'b', pl: -10, cum: 40 });
   });
+
+  it('handles a single point', () => {
+    const cum = computeCumulative([pt('only', 42)]);
+    expect(cum).toHaveLength(1);
+    expect(cum[0].cum).toBe(42);
+  });
+
+  it('does NOT round — callers are responsible for their own precision', () => {
+    // Unlike buildCumulative in api/lib/playerHistory.ts which rounds, this
+    // returns raw float sums. Document the boundary so later refactors don't
+    // accidentally bolt rounding on and break the chart scale math.
+    const cum = computeCumulative([pt('a', 0.1), pt('b', 0.2)]);
+    expect(cum[1].cum).toBe(0.1 + 0.2); // i.e. 0.30000000000000004
+  });
 });
 
 describe('computeScale', () => {
@@ -68,6 +82,14 @@ describe('xFor', () => {
     expect(xFor(0, 3, 320, 8)).toBe(8);
     expect(xFor(1, 3, 320, 8)).toBe(160);
     expect(xFor(2, 3, 320, 8)).toBe(312);
+  });
+
+  it('centers when count is 0 (no divide-by-negative, no NaN)', () => {
+    // The guard is `count <= 1`, so count=0 also falls into it. This test
+    // pins that behaviour — if anyone changes the guard to `count < 1` by
+    // mistake, count=0 would divide by -1 and return a bogus negative x.
+    expect(xFor(0, 0, 320, 8)).toBe(160);
+    expect(Number.isNaN(xFor(0, 0, 320, 8))).toBe(false);
   });
 });
 

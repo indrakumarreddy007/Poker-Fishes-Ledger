@@ -32,6 +32,15 @@ describe('computePlayerResults', () => {
     expect(results[0].buyIn).toBe(50);
     expect(results[0].net).toBe(50);
   });
+
+  it('returns empty when there are no players', () => {
+    expect(computePlayerResults([], [buyIn('a', 100)])).toEqual([]);
+  });
+
+  it('returns players with zero buy-in and zero net when there are no buy-ins', () => {
+    const results = computePlayerResults([player('a', 'Alice', 0)], []);
+    expect(results[0]).toMatchObject({ buyIn: 0, winnings: 0, net: 0 });
+  });
 });
 
 describe('computeSettlements', () => {
@@ -102,6 +111,17 @@ describe('computeSettlements', () => {
       { userId: 'w', name: 'W', buyIn: 0, winnings: 100, net: 100 },
     ]);
     expect(txs).toEqual([]);
+  });
+
+  it('returns empty when there are only losers (no one to receive)', () => {
+    const txs = computeSettlements([
+      { userId: 'l', name: 'L', buyIn: 100, winnings: 0, net: -100 },
+    ]);
+    expect(txs).toEqual([]);
+  });
+
+  it('returns empty for empty input', () => {
+    expect(computeSettlements([])).toEqual([]);
   });
 
   it('total payments equal total losses', () => {

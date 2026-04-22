@@ -1,18 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { computeScale, xFor, yFor } from '../lib/plChart';
-
-interface HistoryEvent {
-  date: string;
-  kind: 'session' | 'settlement';
-  delta: number;
-  note: string;
-}
-
-interface CumulativePoint {
-  date: string;
-  total: number;
-}
+import { deriveModalView, type HistoryEvent, type CumulativePoint } from '../lib/playerHistoryView';
 
 interface HistoryResponse {
   player: { id: number; name: string };
@@ -75,16 +64,9 @@ export default function PlayerHistoryModal({ playerId, playerName, onClose }: Pr
   // Settlements are cash movements between players; they change Net Balance
   // (what /api/players.total_profit shows) but not Net P/L at the table.
   // The endpoint still returns both kinds so other callers can recover the
-  // Net-Balance series; we just filter them out here.
-  const sessionEvents = (data?.events ?? []).filter((e) => e.kind === 'session');
-  const sessionCumulative: CumulativePoint[] = [];
-  {
-    let running = 0;
-    for (const e of sessionEvents) {
-      running += e.delta;
-      sessionCumulative.push({ date: e.date, total: Math.round(running * 100) / 100 });
-    }
-  }
+  // Net-Balance series; we just filter them out here via deriveModalView.
+  const { sessionEvents, sessionCumulative, highestWin, highestLoss, orderedEvents } =
+    deriveModalView(data?.events ?? []);
   const scale = computeScale(
     sessionCumulative.map((p, i) => ({ sessionId: String(i), sessionName: p.date, date: i, pl: 0, cum: p.total }))
   );
@@ -106,19 +88,6 @@ export default function PlayerHistoryModal({ playerId, playerName, onClose }: Pr
         ` L ${points[points.length - 1].x},${yFor(0, scale, H, PAD_Y)} Z`;
   const zeroY = yFor(0, scale, H, PAD_Y);
 
-  // Highest single-session win / loss. Reduce to find extremes rather than
-  // spreading into Math.max to stay safe against very large histories.
-  let highestWin = 0;
-  let highestLoss = 0;
-  for (const e of sessionEvents) {
-    if (e.delta > highestWin) highestWin = e.delta;
-    if (e.delta < highestLoss) highestLoss = e.delta;
-  }
-
-  // Session list, newest-first.
-  const orderedEvents = [...sessionEvents].sort((a, b) =>
-    a.date !== b.date ? (a.date < b.date ? 1 : -1) : 0
-  );
   const hasAnyEvents = sessionEvents.length > 0;
 
   return (
