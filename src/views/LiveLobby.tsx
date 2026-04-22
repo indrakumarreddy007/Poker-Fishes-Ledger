@@ -222,7 +222,7 @@ export default function LiveLobby({ user, onLogout, navigate, initialCode }: Liv
           <div className="space-y-4 animate-slide">
             <div className="flex items-center justify-between px-1">
               <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <History className="w-3 h-3" /> Table History
+                <History className="w-3 h-3" /> Live &amp; Past Tables
               </h2>
             </div>
             {history.length === 0 ? (
