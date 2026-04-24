@@ -1,18 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { computeScale, xFor, yFor } from '../lib/plChart';
-
-interface HistoryEvent {
-  date: string;
-  kind: 'session' | 'settlement';
-  delta: number;
-  note: string;
-}
-
-interface CumulativePoint {
-  date: string;
-  total: number;
-}
+import { deriveModalView, type HistoryEvent, type CumulativePoint } from '../lib/playerHistoryView';
 
 interface HistoryResponse {
   player: { id: number; name: string };
@@ -71,17 +60,23 @@ export default function PlayerHistoryModal({ playerId, playerName, onClose }: Pr
     };
   }, [onClose]);
 
-  const cumulative = data?.cumulative ?? [];
+  // The modal shows session P/L only — chart, tiles, and the list below.
+  // Settlements are cash movements between players; they change Net Balance
+  // (what /api/players.total_profit shows) but not Net P/L at the table.
+  // The endpoint still returns both kinds so other callers can recover the
+  // Net-Balance series; we just filter them out here via deriveModalView.
+  const { sessionEvents, sessionCumulative, highestWin, highestLoss, orderedEvents } =
+    deriveModalView(data?.events ?? []);
   const scale = computeScale(
-    cumulative.map((p, i) => ({ sessionId: String(i), sessionName: p.date, date: i, pl: 0, cum: p.total }))
+    sessionCumulative.map((p, i) => ({ sessionId: String(i), sessionName: p.date, date: i, pl: 0, cum: p.total }))
   );
-  const lastTotal = cumulative.length ? cumulative[cumulative.length - 1].total : 0;
+  const lastTotal = sessionCumulative.length ? sessionCumulative[sessionCumulative.length - 1].total : 0;
   const positive = lastTotal >= 0;
   const stroke = positive ? '#34d399' : '#fb7185';
   const fill = positive ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.15)';
 
-  const points = cumulative.map((p, i) => ({
-    x: xFor(i, cumulative.length, W, PAD_X),
+  const points = sessionCumulative.map((p, i) => ({
+    x: xFor(i, sessionCumulative.length, W, PAD_X),
     y: yFor(p.total, scale, H, PAD_Y),
   }));
   const polylinePoints = points.map((p) => `${p.x},${p.y}`).join(' ');
@@ -92,6 +87,8 @@ export default function PlayerHistoryModal({ playerId, playerName, onClose }: Pr
         points.map((p) => `L ${p.x},${p.y}`).join(' ') +
         ` L ${points[points.length - 1].x},${yFor(0, scale, H, PAD_Y)} Z`;
   const zeroY = yFor(0, scale, H, PAD_Y);
+
+  const hasAnyEvents = sessionEvents.length > 0;
 
   return (
     <div
@@ -130,74 +127,79 @@ export default function PlayerHistoryModal({ playerId, playerName, onClose }: Pr
           <p className="text-zinc-500 text-sm font-medium">Loading history…</p>
         )}
 
-        {data && cumulative.length === 0 && (
+        {data && !hasAnyEvents && (
           <p className="text-zinc-500 text-sm font-medium">No events yet for this player.</p>
         )}
 
-        {data && cumulative.length > 0 && (
+        {data && hasAnyEvents && (
           <>
-            <div className="bg-white/5 rounded-2xl border border-white/10 p-3">
-              <div className="flex items-center justify-between mb-2 px-1">
-                <span className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em]">
-                  Net P/L Over Time
-                </span>
-                <span
-                  className={`text-sm font-black tabular-nums ${positive ? 'text-emerald-400' : 'text-rose-400'}`}
-                >
-                  {positive ? '+' : '-'}₹{Math.abs(lastTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-28" preserveAspectRatio="none">
-                <line
-                  x1={PAD_X}
-                  y1={zeroY}
-                  x2={W - PAD_X}
-                  y2={zeroY}
-                  stroke="rgba(255,255,255,0.15)"
-                  strokeDasharray="3 3"
-                  strokeWidth={1}
-                />
-                {areaPath && <path d={areaPath} fill={fill} />}
-                {points.length > 1 && (
-                  <polyline points={polylinePoints} fill="none" stroke={stroke} strokeWidth={1.5} />
-                )}
-                {points.map((p, i) => {
-                  const kind = data.events[i]?.kind ?? 'session';
-                  const isSession = kind === 'session';
-                  return isSession ? (
+            {sessionEvents.length > 0 && (
+              <div className="bg-white/5 rounded-2xl border border-white/10 p-3">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <span className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em]">
+                    Net P/L Over Time
+                  </span>
+                  <span
+                    className={`text-sm font-black tabular-nums ${positive ? 'text-emerald-400' : 'text-rose-400'}`}
+                  >
+                    {positive ? '+' : '-'}₹{Math.abs(lastTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-28" preserveAspectRatio="none">
+                  <line
+                    x1={PAD_X}
+                    y1={zeroY}
+                    x2={W - PAD_X}
+                    y2={zeroY}
+                    stroke="rgba(255,255,255,0.15)"
+                    strokeDasharray="3 3"
+                    strokeWidth={1}
+                  />
+                  {areaPath && <path d={areaPath} fill={fill} />}
+                  {points.length > 1 && (
+                    <polyline points={polylinePoints} fill="none" stroke={stroke} strokeWidth={1.5} />
+                  )}
+                  {points.map((p, i) => (
                     <circle key={i} cx={p.x} cy={p.y} r={2} fill={stroke} />
-                  ) : (
-                    <rect
-                      key={i}
-                      x={p.x - 2}
-                      y={p.y - 2}
-                      width={4}
-                      height={4}
-                      fill="#fbbf24"
-                      transform={`rotate(45 ${p.x} ${p.y})`}
-                    />
-                  );
-                })}
-              </svg>
-              <div className="flex items-center gap-4 mt-2 px-1 text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: stroke }} /> Session
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5" style={{ background: '#fbbf24', transform: 'rotate(45deg)' }} /> Settlement
-                </span>
+                  ))}
+                </svg>
               </div>
-            </div>
+            )}
+
+            {sessionEvents.length > 0 && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-white/5 rounded-2xl border border-white/10 px-3 py-2.5">
+                  <div className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em]">
+                    Highest Win
+                  </div>
+                  <div className="text-base font-black tabular-nums text-emerald-400">
+                    {highestWin > 0
+                      ? `+₹${highestWin.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                      : '—'}
+                  </div>
+                </div>
+                <div className="bg-white/5 rounded-2xl border border-white/10 px-3 py-2.5">
+                  <div className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em]">
+                    Highest Loss
+                  </div>
+                  <div className="text-base font-black tabular-nums text-rose-400">
+                    {highestLoss < 0
+                      ? `-₹${Math.abs(highestLoss).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                      : '—'}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto -mx-1 px-1 space-y-1.5">
-              {data.events.map((e, i) => (
+              {orderedEvents.map((e, i) => (
                 <div
                   key={i}
                   className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/5"
                 >
                   <div className="flex flex-col min-w-0">
                     <span className="text-xs font-bold text-zinc-300 truncate">{e.note || '—'}</span>
-                    <span className="text-[10px] text-zinc-600 font-mono">{e.date} · {e.kind}</span>
+                    <span className="text-[10px] text-zinc-600 font-mono">{e.date}</span>
                   </div>
                   <span
                     className={`text-sm font-black font-mono tabular-nums shrink-0 ${e.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
