@@ -38,17 +38,11 @@ const pool = new Pool({
   ssl: isLocalDb ? false : { rejectUnauthorized: false },
 });
 
-// Track whether initDB ever succeeded. Used by the /api/live middleware to
-// short-circuit requests with 503 when the DB is known-unhealthy, rather than
-// letting them hit the pool and bubble 500s.
-let dbReady = false;
-
 // Surface pool-level errors (e.g. idle client disconnects) without crashing the
 // process. Without this handler, emitted 'error' events on the Pool become
 // uncaught exceptions.
 pool.on("error", (err) => {
   console.error("[db] pool error:", err.message);
-  dbReady = false;
 });
 
 // ---------------------------------------------------------------------------
@@ -147,7 +141,6 @@ const initDB = async () => {
       CREATE INDEX IF NOT EXISTS idx_live_sp_session      ON live_session_players(session_id);
       CREATE INDEX IF NOT EXISTS idx_live_sp_user         ON live_session_players(user_id);
     `);
-    dbReady = true;
     console.log("[db] initDB ok — schema verified");
   } catch (err) {
     // Keep the server process alive even when Postgres is unreachable at
@@ -582,16 +575,6 @@ Return a JSON array of objects with 'name' (string) and 'amount' (number, positi
 // ===========================================================================
 // ── LIVE (THOR) ROUTES — all under /api/live/ ───────────────────────────────
 // ===========================================================================
-
-// Short-circuit Live routes with 503 when the DB never initialised or has
-// dropped. 503 (not 500) is the honest code for "backend dep dead" and lets
-// the frontend distinguish a backend outage from a real bug.
-app.use("/api/live", (_req, res, next) => {
-  if (!dbReady) {
-    return res.status(503).json({ error: "database unavailable" });
-  }
-  next();
-});
 
 // Helper: generate random 6-char alphanumeric session code
 function generateCode(): string {
