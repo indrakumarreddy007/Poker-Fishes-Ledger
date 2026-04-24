@@ -136,6 +136,11 @@ const initDB = async () => {
         ADD COLUMN IF NOT EXISTS published_to_ledger  BOOLEAN NOT NULL DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS published_session_id INTEGER REFERENCES sessions(id) ON DELETE SET NULL;
 
+      ALTER TABLE live_session_players
+        ADD COLUMN IF NOT EXISTS left_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS leave_pending BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS pending_out_chips NUMERIC;
+
       CREATE INDEX IF NOT EXISTS idx_live_sessions_code   ON live_sessions(session_code);
       CREATE INDEX IF NOT EXISTS idx_live_buy_ins_session ON live_buy_ins(session_id);
       CREATE INDEX IF NOT EXISTS idx_live_sp_session      ON live_session_players(session_id);
@@ -818,6 +823,17 @@ app.post("/api/live/session/join", async (req, res) => {
     );
     if (existing.rows.length > 0) {
       const player = existing.rows[0];
+      if (player.left_at !== null) {
+        const rejoined = await pool.query(
+          `UPDATE live_session_players
+           SET left_at = NULL, final_winnings = NULL,
+               leave_pending = FALSE, pending_out_chips = NULL
+           WHERE session_id = $1 AND user_id = $2
+           RETURNING *`,
+          [session.id, userId]
+        );
+        return res.status(200).json({ player: rejoined.rows[0], sessionId: session.id });
+      }
       return res.status(200).json({ player, sessionId: session.id });
     }
 
@@ -888,6 +904,113 @@ app.post("/api/live/session/settle", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to record winnings" });
+  }
+});
+
+app.post("/api/live/session/leave", async (req, res) => {
+  const { sessionId, userId, outChips } = req.body;
+  if (!sessionId || !userId || outChips === undefined)
+    return res.status(400).json({ error: "sessionId, userId and outChips are required" });
+  if (typeof outChips !== 'number' || outChips < 0)
+    return res.status(400).json({ error: "outChips must be a non-negative number" });
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const sessRes = await client.query(
+      "SELECT id, status FROM live_sessions WHERE id = $1 FOR UPDATE",
+      [sessionId]
+    );
+    if (sessRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Session not found" });
+    }
+    if (sessRes.rows[0].status !== 'active') {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "Session is already closed" });
+    }
+
+    const playerRes = await client.query(
+      "SELECT user_id, left_at, leave_pending FROM live_session_players WHERE session_id = $1 AND user_id = $2",
+      [sessionId, userId]
+    );
+    if (playerRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Player not found in session" });
+    }
+    if (playerRes.rows[0].left_at !== null) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "Player has already left this session" });
+    }
+    if (playerRes.rows[0].leave_pending) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "Leave request already pending" });
+    }
+
+    const result = await client.query(
+      `UPDATE live_session_players
+       SET leave_pending = TRUE,
+           pending_out_chips = $1
+       WHERE session_id = $2 AND user_id = $3
+       RETURNING *`,
+      [outChips, sessionId, userId]
+    );
+
+    await client.query("COMMIT");
+    res.json({ player: result.rows[0] });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error(error);
+    res.status(500).json({ error: "Failed to submit leave request" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/live/session/leave/approve", async (req, res) => {
+  const { sessionId, userId } = req.body;
+  if (!sessionId || !userId)
+    return res.status(400).json({ error: "sessionId and userId are required" });
+  try {
+    const result = await pool.query(
+      `UPDATE live_session_players
+       SET final_winnings = pending_out_chips,
+           left_at = NOW(),
+           leave_pending = FALSE,
+           pending_out_chips = NULL
+       WHERE session_id = $1 AND user_id = $2 AND leave_pending = TRUE
+       RETURNING *`,
+      [sessionId, userId]
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: "No pending leave request found" });
+    res.json({ player: result.rows[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to approve leave request" });
+  }
+});
+
+app.post("/api/live/session/leave/reject", async (req, res) => {
+  const { sessionId, userId } = req.body;
+  if (!sessionId || !userId)
+    return res.status(400).json({ error: "sessionId and userId are required" });
+  try {
+    const result = await pool.query(
+      `UPDATE live_session_players
+       SET leave_pending = FALSE,
+           pending_out_chips = NULL
+       WHERE session_id = $1 AND user_id = $2
+       RETURNING *`,
+      [sessionId, userId]
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: "Player not found in session" });
+    res.json({ player: result.rows[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to reject leave request" });
   }
 });
 
