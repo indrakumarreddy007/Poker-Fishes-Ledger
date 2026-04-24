@@ -3,6 +3,8 @@ import {
   liveApi, LiveUser, LiveSession, LiveSessionPlayer as LiveSessionPlayerType, LiveBuyIn,
 } from '../services/liveApi';
 import { aggregateTableBuyIns, tablePot as computeTablePot, potShare } from '../lib/buyIns';
+import { countPriorBuyIns } from '../lib/buyInCelebration';
+import BuyInCelebration from '../components/BuyInCelebration';
 import {
   Clock, Wallet, CheckCircle, AlertCircle, Plus, Zap, History, DollarSign, ShieldCheck, Users,
 } from 'lucide-react';
@@ -20,6 +22,10 @@ export default function LiveSessionPlayer({ user, sessionCode, navigate }: Props
   const [allBuyIns, setAllBuyIns] = useState<LiveBuyIn[]>([]);
   const [amount, setAmount]     = useState('');
   const [isRequesting, setIsRequesting] = useState(false);
+  // Which reload number to celebrate right now (null = no overlay). Set at
+  // request time based on prior buy-in count; cleared when the overlay
+  // auto-dismisses or the user taps it.
+  const [celebrationNumber, setCelebrationNumber] = useState<number | null>(null);
 
   const refreshData = async () => {
     const data = await liveApi.getSession(sessionCode);
@@ -54,9 +60,16 @@ export default function LiveSessionPlayer({ user, sessionCode, navigate }: Props
   const handleRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session || !amount || parseFloat(amount) <= 0) return;
+    // Snapshot reload count BEFORE the server round-trip — uses the buy-ins
+    // already in local state. "buyIns" is pre-filtered to this user, so pass
+    // no userId and let countPriorBuyIns work on the filtered list.
+    const prior = countPriorBuyIns(buyIns);
     await liveApi.requestBuyIn(session.id, user.id, parseFloat(amount));
     setAmount('');
     setIsRequesting(false);
+    if (prior + 1 >= 2) {
+      setCelebrationNumber(prior + 1);
+    }
     refreshData();
   };
 
@@ -75,6 +88,12 @@ export default function LiveSessionPlayer({ user, sessionCode, navigate }: Props
 
   return (
     <div className="space-y-6 pb-12">
+      {celebrationNumber !== null && (
+        <BuyInCelebration
+          buyInNumber={celebrationNumber}
+          onDismiss={() => setCelebrationNumber(null)}
+        />
+      )}
       <div className="text-center space-y-4">
         <h1 className="text-5xl font-black tracking-tighter text-white drop-shadow-2xl">
           {session.name}
