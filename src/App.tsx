@@ -41,6 +41,7 @@ import LiveSessionAdmin from './views/LiveSessionAdmin';
 import LiveSessionPlayer from './views/LiveSessionPlayer';
 import LiveSettlement from './views/LiveSettlement';
 import PlayerHistoryModal from './components/PlayerHistoryModal';
+import PokerQuote from './components/PokerQuote';
 import type { LiveUser } from './services/liveApi';
 
 function cn(...inputs: ClassValue[]) {
@@ -672,6 +673,7 @@ export default function App() {
         onTouchMove={onSwipeMove}
         onTouchEnd={onSwipeEnd}
       >
+        <PokerQuote variant="strip" className="mb-8" />
         <AnimatePresence mode="wait" onExitComplete={() => setIsTabSwitching(false)}>
           {activeTab === 'dashboard' && (
             <motion.div
