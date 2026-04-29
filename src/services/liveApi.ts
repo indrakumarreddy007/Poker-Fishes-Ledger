@@ -33,6 +33,9 @@ export interface LiveSessionPlayer {
   name: string;
   role: 'admin' | 'player';
   finalWinnings?: number;
+  leftAt?: number;
+  leavePending: boolean;
+  pendingOutChips?: number;
 }
 
 export interface LiveBuyIn {
@@ -94,6 +97,9 @@ const mapPlayer = (p: any): LiveSessionPlayer => ({
   name: p.name,
   role: p.role,
   finalWinnings: p.final_winnings != null ? parseFloat(p.final_winnings) : undefined,
+  leftAt: p.left_at != null ? new Date(p.left_at).getTime() : undefined,
+  leavePending: p.leave_pending === true || p.leave_pending === 't',
+  pendingOutChips: p.pending_out_chips != null ? parseFloat(p.pending_out_chips) : undefined,
 });
 
 const mapBuyIn = (b: any): LiveBuyIn => ({
@@ -254,6 +260,38 @@ export const liveApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId, userId, winnings }),
+    });
+    return res.ok;
+  },
+
+  leaveSession: async (
+    sessionId: string,
+    userId: string,
+    outChips: number
+  ): Promise<{ success: boolean; error?: string }> => {
+    const r = await apiFetch<{ player: any }>(`${BASE}/session/leave`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, userId, outChips }),
+    });
+    if (!r.ok) return { success: false, error: r.error };
+    return { success: true };
+  },
+
+  approveLeave: async (sessionId: string, userId: string): Promise<boolean> => {
+    const res = await fetch(`${BASE}/session/leave/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, userId }),
+    });
+    return res.ok;
+  },
+
+  rejectLeave: async (sessionId: string, userId: string): Promise<boolean> => {
+    const res = await fetch(`${BASE}/session/leave/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, userId }),
     });
     return res.ok;
   },

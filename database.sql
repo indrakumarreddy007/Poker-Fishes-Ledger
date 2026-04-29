@@ -101,6 +101,12 @@ ALTER TABLE live_sessions
   ADD COLUMN IF NOT EXISTS published_to_ledger   BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS published_session_id  INTEGER REFERENCES sessions(id) ON DELETE SET NULL;
 
+-- Leave-table support: tracks when a player cashes out early while session is still active.
+ALTER TABLE live_session_players
+  ADD COLUMN IF NOT EXISTS left_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS leave_pending BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS pending_out_chips NUMERIC;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_live_sessions_code      ON live_sessions(session_code);
 CREATE INDEX IF NOT EXISTS idx_live_buy_ins_session    ON live_buy_ins(session_id);

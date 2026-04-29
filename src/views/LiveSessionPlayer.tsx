@@ -4,7 +4,7 @@ import {
 } from '../services/liveApi';
 import { aggregateTableBuyIns, tablePot as computeTablePot, potShare } from '../lib/buyIns';
 import {
-  Clock, Wallet, CheckCircle, AlertCircle, Plus, Zap, History, DollarSign, ShieldCheck, Users,
+  Clock, Wallet, CheckCircle, AlertCircle, Plus, Zap, History, DollarSign, ShieldCheck, Users, LogOut, LogIn,
 } from 'lucide-react';
 
 interface Props {
@@ -20,6 +20,12 @@ export default function LiveSessionPlayer({ user, sessionCode, navigate }: Props
   const [allBuyIns, setAllBuyIns] = useState<LiveBuyIn[]>([]);
   const [amount, setAmount]     = useState('');
   const [isRequesting, setIsRequesting] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [outChips, setOutChips] = useState('');
+  const [leaveError, setLeaveError] = useState('');
+  const [hasLeft, setHasLeft] = useState(false);
+  const [leavePending, setLeavePending] = useState(false);
+  const [pendingOutChips, setPendingOutChips] = useState<number | undefined>(undefined);
 
   const refreshData = async () => {
     const data = await liveApi.getSession(sessionCode);
@@ -36,6 +42,10 @@ export default function LiveSessionPlayer({ user, sessionCode, navigate }: Props
         .filter((b) => b.userId === user.id)
         .sort((a, b) => b.timestamp - a.timestamp)
     );
+    const me = data.players.find((p) => p.userId === user.id);
+    setHasLeft(!!me?.leftAt);
+    setLeavePending(!!me?.leavePending);
+    setPendingOutChips(me?.pendingOutChips);
   };
 
   const tableBuyIns = useMemo(
@@ -57,6 +67,38 @@ export default function LiveSessionPlayer({ user, sessionCode, navigate }: Props
     await liveApi.requestBuyIn(session.id, user.id, parseFloat(amount));
     setAmount('');
     setIsRequesting(false);
+    refreshData();
+  };
+
+  const handleLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!session) return;
+    const chips = parseFloat(outChips);
+    if (isNaN(chips) || chips < 0) {
+      setLeaveError('Please enter a valid chip count (0 or more).');
+      return;
+    }
+    setLeaveError('');
+    const result = await liveApi.leaveSession(session.id, user.id, chips);
+    if (!result.success) {
+      setLeaveError(result.error || 'Failed to leave table. Please try again.');
+      return;
+    }
+    setHasLeft(true);
+    setIsLeaving(false);
+    setOutChips('');
+  };
+
+  const handleCancelLeave = async () => {
+    if (!session) return;
+    await liveApi.rejectLeave(session.id, user.id);
+    refreshData();
+  };
+
+  const handleRejoin = async () => {
+    if (!session) return;
+    await liveApi.joinSession(session.sessionCode, user.id);
+    setHasLeft(false);
     refreshData();
   };
 
@@ -105,6 +147,91 @@ export default function LiveSessionPlayer({ user, sessionCode, navigate }: Props
         </div>
       </div>
 
+      {isLeaving && !leavePending && (
+        <form
+          onSubmit={handleLeave}
+          className="p-6 bg-rose-950/30 border-2 border-rose-500/30 rounded-3xl space-y-5"
+        >
+          <div className="space-y-1">
+            <h3 className="text-lg font-black text-rose-400">Cash Out</h3>
+            <p className="text-xs text-slate-400">Enter the chips you are leaving the table with.</p>
+          </div>
+          <div className="relative">
+            <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-rose-400" />
+            <input
+              type="number"
+              autoFocus
+              min="0"
+              className="w-full bg-slate-900 border border-slate-800 rounded-2xl pl-12 pr-4 py-5 focus:ring-2 focus:ring-rose-500 outline-none text-3xl font-black text-white"
+              placeholder="0"
+              value={outChips}
+              onChange={(e) => setOutChips(e.target.value)}
+            />
+          </div>
+          {leaveError && (
+            <p className="text-rose-400 text-xs font-bold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" /> {leaveError}
+            </p>
+          )}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => { setIsLeaving(false); setLeaveError(''); }}
+              className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-black text-slate-400 uppercase"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 py-4 bg-rose-500 text-white rounded-xl text-xs font-black uppercase shadow-xl shadow-rose-500/20 active:scale-95 transition-all"
+            >
+              Confirm Leave
+            </button>
+          </div>
+        </form>
+      )}
+
+      {leavePending && (
+        <section className="bg-amber-500/10 border border-amber-500/20 p-8 rounded-[2.5rem] text-center space-y-4">
+          <div className="flex justify-center">
+            <span className="flex items-center gap-2 text-[10px] font-black uppercase text-amber-500 bg-amber-500/10 px-5 py-2.5 rounded-full border border-amber-500/20 animate-pulse">
+              <Clock className="w-4 h-4" /> Awaiting Admin Approval
+            </span>
+          </div>
+          <h2 className="text-xl font-black text-amber-400">Leave Request Submitted</h2>
+          <p className="text-xs text-slate-400">
+            You requested to leave with <span className="text-white font-black">₹{pendingOutChips}</span> chips. Waiting for admin to approve.
+          </p>
+          <button
+            onClick={handleCancelLeave}
+            className="inline-flex items-center gap-2 px-8 py-3 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black rounded-2xl transition-all active:scale-95"
+          >
+            Cancel Request
+          </button>
+        </section>
+      )}
+
+      {hasLeft && (
+        <section className="bg-rose-500/10 border border-rose-500/20 p-8 rounded-[2.5rem] text-center space-y-4">
+          <LogOut className="w-10 h-10 text-rose-400 mx-auto" />
+          <h2 className="text-xl font-black text-rose-400">You Have Left This Table</h2>
+          <p className="text-xs text-slate-400">
+            Your chip count has been recorded. The admin will finalize your result when the session closes.
+          </p>
+          <div className="pt-1">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Chips In</p>
+            <p className="text-3xl font-black text-white">₹{totalApproved}</p>
+          </div>
+          <button
+            onClick={handleRejoin}
+            className="inline-flex items-center gap-2 px-8 py-3 bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 text-slate-300 text-xs font-black rounded-2xl transition-all active:scale-95"
+          >
+            <LogIn className="w-4 h-4" /> Rejoin Table
+          </button>
+        </section>
+      )}
+
+      {!hasLeft && !leavePending && (
       <section className="bg-slate-900 p-8 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-8">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-black flex items-center gap-3">
@@ -113,13 +240,23 @@ export default function LiveSessionPlayer({ user, sessionCode, navigate }: Props
             </div>
             Top Up
           </h2>
-          {!isRequesting && (
-            <button
-              onClick={() => setIsRequesting(true)}
-              className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black rounded-2xl transition-all shadow-xl shadow-emerald-500/30 active:scale-95 flex items-center gap-2"
-            >
-              Add Chips
-            </button>
+          {!isRequesting && !isLeaving && (
+            <div className="flex items-center gap-2">
+              {!isAdmin && (
+                <button
+                  onClick={() => setIsLeaving(true)}
+                  className="px-4 py-3 bg-rose-500/10 hover:bg-rose-500 border border-rose-500/20 hover:border-rose-500 text-rose-400 hover:text-white text-xs font-black rounded-2xl transition-all active:scale-95 flex items-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" /> Leave
+                </button>
+              )}
+              <button
+                onClick={() => setIsRequesting(true)}
+                className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black rounded-2xl transition-all shadow-xl shadow-emerald-500/30 active:scale-95 flex items-center gap-2"
+              >
+                Add Chips
+              </button>
+            </div>
           )}
         </div>
 
@@ -219,6 +356,7 @@ export default function LiveSessionPlayer({ user, sessionCode, navigate }: Props
           )}
         </div>
       </section>
+      )}
 
       <section className="bg-slate-900 p-8 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-6">
         <div className="flex justify-between items-center">

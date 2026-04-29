@@ -4,7 +4,7 @@ import {
 } from '../services/liveApi';
 import {
   Check, X, Users, Trophy, Plus, DollarSign, AlertTriangle,
-  History, ChevronDown, ChevronUp, Clock, ShieldCheck,
+  History, ChevronDown, ChevronUp, Clock, ShieldCheck, LogOut,
 } from 'lucide-react';
 
 interface Props {
@@ -43,6 +43,15 @@ export default function LiveSessionAdmin({ user, sessionCode, navigate }: Props)
     setPlayers(data.players);
     setBuyIns(data.buyIns);
     setFetchError('');
+    setFinalChipCounts((prev) => {
+      const updated = { ...prev };
+      for (const p of data.players) {
+        if (p.leftAt && p.finalWinnings != null && !updated[p.userId]) {
+          updated[p.userId] = String(p.finalWinnings);
+        }
+      }
+      return updated;
+    });
   };
 
   useEffect(() => {
@@ -85,7 +94,7 @@ export default function LiveSessionAdmin({ user, sessionCode, navigate }: Props)
       .reduce((sum, b) => sum + b.amount, 0);
     let totalWinnings = 0;
     for (const p of players) {
-      const val = parseFloat(finalChipCounts[p.userId] || '0');
+      const val = parseFloat(finalChipCounts[p.userId] ?? String(p.finalWinnings ?? 0));
       totalWinnings += val;
       await liveApi.settlePlayer(session.id, p.userId, val);
     }
@@ -119,6 +128,7 @@ export default function LiveSessionAdmin({ user, sessionCode, navigate }: Props)
   }
 
   const pendingBuyIns = buyIns.filter((b) => b.status === 'pending');
+  const pendingLeaveRequests = players.filter((p) => p.leavePending);
 
   return (
     <div className="space-y-6 pb-12">
@@ -209,10 +219,17 @@ export default function LiveSessionAdmin({ user, sessionCode, navigate }: Props)
             {players.map((p) => (
               <div
                 key={p.userId}
-                className="flex items-center justify-between p-5 bg-slate-950 rounded-2xl border border-slate-800 focus-within:border-amber-500/50 transition-all"
+                className={`flex items-center justify-between p-5 bg-slate-950 rounded-2xl border focus-within:border-amber-500/50 transition-all ${p.leftAt ? 'border-slate-700 opacity-75' : 'border-slate-800'}`}
               >
                 <div>
-                  <span className="font-black text-slate-200 block">{p.name}</span>
+                  <span className="font-black text-slate-200 flex items-center gap-2">
+                    {p.name}
+                    {p.leftAt && (
+                      <span className="text-[9px] font-black uppercase tracking-widest bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full border border-slate-600">
+                        Left {new Date(p.leftAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                  </span>
                   <span className="text-[10px] text-slate-500 font-bold uppercase">
                     Invested: ₹{getPlayerStats(p.userId).total}
                   </span>
@@ -258,16 +275,50 @@ export default function LiveSessionAdmin({ user, sessionCode, navigate }: Props)
             {/* Approval Queue */}
             <section className="space-y-4">
               <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2 px-2">
-                <Clock className="w-4 h-4" /> Approval Queue ({pendingBuyIns.length})
+                <Clock className="w-4 h-4" /> Approval Queue ({pendingBuyIns.length + pendingLeaveRequests.length})
               </h2>
               <div className="space-y-3">
-                {pendingBuyIns.length === 0 ? (
+                {pendingBuyIns.length === 0 && pendingLeaveRequests.length === 0 ? (
                   <div className="text-center py-16 bg-slate-900/30 rounded-[2rem] border-2 border-dashed border-slate-800/50 text-slate-600 font-bold italic flex flex-col items-center gap-2">
                     <ShieldCheck className="w-8 h-8 opacity-20" />
                     No pending requests
                   </div>
                 ) : (
-                  pendingBuyIns.map((b) => (
+                  <>
+                  {pendingLeaveRequests.map((p) => (
+                    <div
+                      key={p.userId}
+                      className="flex items-center justify-between bg-slate-900 border border-rose-500/20 p-6 rounded-3xl hover:border-rose-500/40 transition-all shadow-xl"
+                    >
+                      <div>
+                        <p className="font-black text-slate-200 text-lg flex items-center gap-2">
+                          {p.name}
+                          <span className="text-[9px] font-black uppercase tracking-widest bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded-full border border-rose-500/20">
+                            Leave
+                          </span>
+                        </p>
+                        <p className="text-rose-400 text-3xl font-black tracking-tighter mt-1">
+                          ₹{p.pendingOutChips ?? 0}
+                        </p>
+                        <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">Out chips</p>
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={async () => { await liveApi.rejectLeave(session!.id, p.userId); refreshData(); }}
+                          className="p-4 bg-slate-800 hover:bg-rose-500 text-slate-500 hover:text-white rounded-2xl transition-all active:scale-90"
+                        >
+                          <X className="w-6 h-6" />
+                        </button>
+                        <button
+                          onClick={async () => { await liveApi.approveLeave(session!.id, p.userId); refreshData(); }}
+                          className="p-4 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white rounded-2xl transition-all active:scale-90"
+                        >
+                          <Check className="w-6 h-6" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {pendingBuyIns.map((b) => (
                     <div
                       key={b.id}
                       className="flex items-center justify-between bg-slate-900 border border-slate-800 p-6 rounded-3xl hover:border-emerald-500/30 transition-all shadow-xl"
@@ -299,6 +350,8 @@ export default function LiveSessionAdmin({ user, sessionCode, navigate }: Props)
                       </div>
                     </div>
                   ))
+                  }
+                  </>
                 )}
               </div>
             </section>
@@ -331,7 +384,7 @@ export default function LiveSessionAdmin({ user, sessionCode, navigate }: Props)
                             onClick={() =>
                               setExpandedPlayer(isExpanded ? null : p.userId)
                             }
-                            className="transition-all cursor-pointer hover:bg-slate-950/50"
+                            className={`transition-all cursor-pointer hover:bg-slate-950/50 ${p.leftAt ? 'opacity-50' : ''}`}
                           >
                             <td className="px-6 py-5">
                               <div className="flex items-center gap-4">
@@ -345,7 +398,14 @@ export default function LiveSessionAdmin({ user, sessionCode, navigate }: Props)
                                   {p.name.charAt(0)}
                                 </div>
                                 <div>
-                                  <p className="font-black text-slate-200">{p.name}</p>
+                                  <p className="font-black text-slate-200 flex items-center gap-2">
+                                    {p.name}
+                                    {p.leftAt && (
+                                      <span className="text-[9px] font-black uppercase tracking-widest bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full border border-slate-600">
+                                        Left
+                                      </span>
+                                    )}
+                                  </p>
                                   <p className="text-[9px] font-bold text-slate-500 uppercase">
                                     {stats.history.length} Transactions
                                   </p>
